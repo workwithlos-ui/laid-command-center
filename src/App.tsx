@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router';
 import { Sidebar } from '@/components/Sidebar';
 import { TopBar } from '@/components/TopBar';
@@ -9,10 +10,12 @@ import { SwarmView } from '@/views/SwarmView';
 import { SettingsView } from '@/views/SettingsView';
 
 export default function App() {
+  const [commandOpen, setCommandOpen] = useState(false);
+
   return (
     <div className="min-h-[100dvh] bg-[#0a0a0a]">
       <Sidebar />
-      <TopBar />
+      <TopBar onCommandOpen={() => setCommandOpen(!commandOpen)} />
       <main className="pt-14 pb-20 px-4 lg:pb-8 lg:pl-16">
         <div className="mx-auto max-w-[1400px] py-6">
           <Routes>
