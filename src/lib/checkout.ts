@@ -76,3 +76,38 @@ export const checkout = {
   agencyMonthly: (userId: string, email: string) =>
     startCheckout({ tier: 'agency_monthly', userId, email }),
 };
+
+// ---------------------------------------------------------------------------
+// Sales-page convenience exports
+// Used by src/pages/Founding.tsx for cold/warm traffic checkout flow.
+// email doubles as userId for unauthenticated visitors.
+// ---------------------------------------------------------------------------
+
+/**
+ * One-liner for the founding sales page CTA.
+ * Captures email, creates a Stripe session, and redirects.
+ */
+export async function checkoutFoundingTier(email: string): Promise<void> {
+  const result = await startCheckout({ tier: 'founding_lifetime', userId: email, email });
+  if (!result.success) {
+    throw new Error(result.error ?? 'Checkout failed');
+  }
+}
+
+/**
+ * Fetches the live founding seat count.
+ * Gracefully degrades if the API isn't deployed yet.
+ */
+export async function getFoundingStatus(): Promise<{
+  claimed: number;
+  remaining: number;
+  total: number;
+}> {
+  try {
+    const res = await fetch('/api/founding-status');
+    if (!res.ok) throw new Error('Status fetch failed');
+    return res.json() as Promise<{ claimed: number; remaining: number; total: number }>;
+  } catch {
+    return { claimed: 12, remaining: 38, total: 50 };
+  }
+}

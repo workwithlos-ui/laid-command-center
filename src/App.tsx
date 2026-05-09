@@ -8,8 +8,11 @@ import { AssetsView } from '@/views/AssetsView';
 import { TrackerView } from '@/views/TrackerView';
 import { SwarmView } from '@/views/SwarmView';
 import { SettingsView } from '@/views/SettingsView';
+import Founding from '@/pages/Founding';
+import CheckoutSuccess from '@/pages/CheckoutSuccess';
 
-export default function App() {
+// ─── App shell (with sidebar + topbar) ────────────────────────────────────────
+function AppShell() {
   const [commandOpen, setCommandOpen] = useState(false);
 
   return (
@@ -30,5 +33,18 @@ export default function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+// ─── Root router — public routes rendered without app shell ───────────────────
+export default function App() {
+  return (
+    <Routes>
+      {/* Public routes — no sidebar or auth required */}
+      <Route path="/founding" element={<Founding />} />
+      <Route path="/checkout/success" element={<CheckoutSuccess />} />
+      {/* All other routes go through the authenticated app shell */}
+      <Route path="/*" element={<AppShell />} />
+    </Routes>
   );
 }
