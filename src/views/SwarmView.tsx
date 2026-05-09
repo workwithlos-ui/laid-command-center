@@ -32,7 +32,7 @@ export function SwarmView() {
   return (
     <div className="space-y-8">
       <p className="text-sm text-[#a0a0a0]">
-        This is the system Los Silva uses to produce 300 pieces of tactical AI content every month — without writing a single post manually.
+        This is the system Los Silva uses to produce 300 pieces of tactical AI content every month , without writing a single post manually.
       </p>
 
       {/* Desktop horizontal flow */}

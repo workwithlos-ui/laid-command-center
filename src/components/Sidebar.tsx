@@ -10,11 +10,11 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/feed', label: 'Feed', icon: Newspaper },
+  { path: '/', label: 'Command', icon: LayoutDashboard },
+  { path: '/feed', label: 'Packs', icon: Newspaper },
   { path: '/assets', label: 'Assets', icon: Package },
   { path: '/tracker', label: 'Tracker', icon: Users },
-  { path: '/swarm', label: 'Swarm', icon: GitBranch },
+  { path: '/swarm', label: 'Pipeline', icon: GitBranch },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -25,16 +25,15 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop sidebar */}
       <aside
-        className="fixed left-0 top-0 z-40 hidden h-full flex-col border-r border-[#222222] bg-[#0a0a0a] transition-all duration-200 lg:flex"
+        className="fixed left-0 top-0 z-40 hidden h-full flex-col border-r border-[#222222] bg-[#0a0a0a]/95 backdrop-blur-xl transition-all duration-200 lg:flex"
         style={{ width: hovered ? 240 : 64 }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         <div className="flex h-14 items-center justify-center border-b border-[#222222]">
-          <span className={`font-bold text-[#c9a84c] transition-opacity ${hovered ? 'text-lg' : 'text-sm'}`}>
-            {hovered ? 'LAID' : 'L'}
+          <span className={`font-bold text-[#c9a84c] transition-opacity ${hovered ? 'text-lg tracking-[0.18em]' : 'text-sm'}`}>
+            {hovered ? 'LAID AI' : 'L'}
           </span>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-2">
@@ -45,15 +44,15 @@ export function Sidebar() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex items-center gap-3 rounded-md px-3 py-3 text-left transition-all ${
+                className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-all ${
                   isActive
-                    ? 'border-l-[3px] border-l-[#c9a84c] bg-[#1a1a1a] text-[#c9a84c]'
+                    ? 'border-l-[3px] border-l-[#c9a84c] bg-[#1a1a1a] text-[#c9a84c] shadow-lg shadow-black/20'
                     : 'border-l-[3px] border-l-transparent text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white'
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" />
                 {hovered && (
-                  <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+                  <span className="whitespace-nowrap text-sm font-medium">{item.label}</span>
                 )}
               </button>
             );
@@ -61,8 +60,7 @@ export function Sidebar() {
         </nav>
       </aside>
 
-      {/* Mobile bottom tabs */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-[#222222] bg-[#0a0a0a] lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-[#222222] bg-[#0a0a0a]/95 backdrop-blur-xl lg:hidden">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;

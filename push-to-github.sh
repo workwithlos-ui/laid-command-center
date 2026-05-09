@@ -1,5 +1,5 @@
 #!/bin/bash
-# LAID Command Center — GitHub Push Script
+# LAID Command Center , GitHub Push Script
 # Run this in Terminal (Mac) or Git Bash (Windows)
 # Replace YOUR_USERNAME with your GitHub username
 
