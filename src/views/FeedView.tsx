@@ -1,20 +1,11 @@
-import { useMemo, useState } from 'react';
-import {
-  CheckCircle,
-  Copy,
-  ExternalLink,
-  Loader2,
-  Search,
-  Sparkles,
-  Wand2,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle, Loader2, Search, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { ContentPackDetailDialog } from '@/components/ContentPackDetailDialog';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { seedContentPacks } from '@/data/contentPacks';
 import type { CommandCenterSettings, ContentPack } from '@/data/types';
 
 const statusFilters = [
@@ -36,71 +27,46 @@ const defaultSettings: CommandCenterSettings = {
   defaultStyle: 'ai_news',
 };
 
-function contentPackToText(pack: ContentPack, section: string) {
-  if (section === 'long') return `${pack.long_post.title}\n\n${pack.long_post.body_markdown}`;
-  if (section === 'x') return [pack.x_thread.hook, ...pack.x_thread.tweets].join('\n\n');
-  if (section === 'ig') return `${pack.ig_caption.hook}\n\n${pack.ig_caption.body}\n\n${pack.ig_caption.cta}`;
-  if (section === 'carousel') {
-    return pack.carousel.slides
-      .map((slide, index) => `${index + 1}. ${slide.title}\n${slide.bullets.map((bullet) => `• ${bullet}`).join('\n')}`)
-      .join('\n\n');
-  }
-  return `${pack.short_script.title}\n\n${pack.short_script.beats.map((beat) => `• ${beat}`).join('\n')}`;
-}
-
-function updatePackSection(pack: ContentPack, section: string, value: string): ContentPack {
-  if (section === 'long') {
-    const [title = pack.long_post.title, ...bodyParts] = value.split('\n');
-    return { ...pack, long_post: { title: title.trim() || pack.long_post.title, body_markdown: bodyParts.join('\n').trim() } };
-  }
-  if (section === 'x') {
-    const parts = value.split('\n\n').map((item) => item.trim()).filter(Boolean);
-    return { ...pack, x_thread: { hook: parts[0] || pack.x_thread.hook, tweets: parts.slice(1) } };
-  }
-  if (section === 'ig') {
-    const parts = value.split('\n\n').map((item) => item.trim()).filter(Boolean);
-    return {
-      ...pack,
-      ig_caption: {
-        hook: parts[0] || pack.ig_caption.hook,
-        body: parts.slice(1, -1).join('\n\n') || pack.ig_caption.body,
-        cta: parts[parts.length - 1] || pack.ig_caption.cta,
-      },
-    };
-  }
-  if (section === 'carousel') {
-    const slides = value
-      .split('\n\n')
-      .map((block) => block.trim())
-      .filter(Boolean)
-      .map((block, index) => {
-        const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-        const title = (lines[0] || `Slide ${index + 1}`).replace(/^\d+\.\s*/, '');
-        const bullets = lines.slice(1).map((line) => line.replace(/^•\s*/, '').trim()).filter(Boolean);
-        return { title, bullets: bullets.length ? bullets : ['Add the key point', 'Add the proof or example'] };
-      });
-    return { ...pack, carousel: { slides: slides.length ? slides : pack.carousel.slides } };
-  }
-  if (section === 'script') {
-    const lines = value.split('\n').map((item) => item.replace(/^•\s*/, '').trim()).filter(Boolean);
-    return { ...pack, short_script: { title: lines[0] || pack.short_script.title, beats: lines.slice(1) } };
-  }
-  return pack;
+function normalizeContentPack(payload: unknown): ContentPack | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  return (record.contentPack || record) as ContentPack;
 }
 
 export function FeedView() {
-  const [contentPacks, setContentPacks] = useLocalStorage<ContentPack[]>('laid-content-packs', seedContentPacks);
+  const [contentPacks, setContentPacks] = useLocalStorage<ContentPack[]>('laid-content-packs', []);
   const [settings] = useLocalStorage<CommandCenterSettings>('laid-settings', defaultSettings);
   const [copiedPacks, setCopiedPacks] = useLocalStorage<string[]>('laid-copied-packs', []);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
-  const [theme, setTheme] = useState('AI tools for content creators');
+  const [theme, setTheme] = useState('AI tools for 500k-10M founders');
   const [style, setStyle] = useState<ContentPack['style']>(settings.defaultStyle);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState({ visible: false, message: '' });
+
+  useEffect(() => {
+    let active = true;
+    async function loadPacks() {
+      try {
+        const response = await fetch('/api/contentPacks');
+        if (!response.ok) throw new Error('Unable to load saved content packs.');
+        const packs = await response.json();
+        if (active && Array.isArray(packs)) setContentPacks(packs);
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : 'Unable to load saved content packs.');
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadPacks();
+    return () => {
+      active = false;
+    };
+  }, [setContentPacks]);
 
   const selectedPack = contentPacks.find((pack) => pack.id === selectedPackId) || null;
 
@@ -124,8 +90,7 @@ export function FeedView() {
     setTimeout(() => setToast({ visible: false, message: '' }), 2200);
   };
 
-  const handleCopy = (pack: ContentPack, section: string) => {
-    navigator.clipboard.writeText(contentPackToText(pack, section));
+  const handleCopy = (pack: ContentPack) => {
     setCopiedPacks((prev) => (prev.includes(pack.id) ? prev : [...prev, pack.id]));
     showToast('Copied to clipboard.');
   };
@@ -136,20 +101,15 @@ export function FeedView() {
 
   const generatePack = async () => {
     setError('');
-    const apiKey = settings.openaiApiKey || settings.perplexityApiKey;
-    if (!apiKey) {
-      setError('Add an OpenAI API key in Settings first. The key stays in localStorage and is sent only for generation.');
-      return;
-    }
-
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/generate-content-pack', {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (settings.openaiApiKey) headers['x-openai-api-key'] = settings.openaiApiKey;
+      const response = await fetch('/api/generateContentPack', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          apiKey,
-          provider: settings.openaiApiKey ? 'openai' : 'perplexity',
+          apiKey: settings.openaiApiKey || undefined,
           theme,
           style,
           audience: settings.audience || defaultSettings.audience,
@@ -157,10 +117,12 @@ export function FeedView() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Generation failed.');
-      setContentPacks((prev) => [payload.contentPack, ...prev]);
-      setSelectedPackId(payload.contentPack.id);
+      const contentPack = normalizeContentPack(payload);
+      if (!contentPack?.id) throw new Error('Generation returned an invalid content pack.');
+      setContentPacks((prev) => [contentPack, ...prev.filter((item) => item.id !== contentPack.id)]);
+      setSelectedPackId(contentPack.id);
       setGenerateOpen(false);
-      showToast('Content pack generated.');
+      showToast('Content pack generated and saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed.');
     } finally {
@@ -177,10 +139,10 @@ export function FeedView() {
               <Sparkles className="h-3 w-3" /> AI Content Command Center
             </div>
             <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-              Turn real AI updates into a complete founder content pack.
+              Generate a full pack from a real AI update.
             </h2>
             <p className="mt-2 text-sm leading-6 text-[#a0a0a0]">
-              Find one useful tool update, score it for operator impact, write the long post, then repurpose it into X, Instagram, carousel, and script formats.
+              The backend finds a recent AI update, scores it, writes the operator post, runs the repurposer, checks quality, and saves the pack.
             </p>
           </div>
           <Button
@@ -219,11 +181,23 @@ export function FeedView() {
         </div>
       </div>
 
+      {error && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{error}</div>}
+
       <p className="text-[11px] uppercase tracking-[0.2em] text-[#666666]">
         {filtered.length} content packs, {contentPacks.length * 5} generated formats
       </p>
 
       <div className="grid gap-3 xl:grid-cols-2">
+        {isLoading && (
+          <div className="rounded-2xl border border-[#222222] bg-[#111111] p-6 text-sm text-[#a0a0a0]">
+            <Loader2 className="mb-3 h-5 w-5 animate-spin text-[#c9a84c]" /> Loading saved content packs.
+          </div>
+        )}
+        {!isLoading && filtered.length === 0 && (
+          <div className="rounded-2xl border border-[#222222] bg-[#111111] p-6 text-sm text-[#a0a0a0]">
+            No content packs yet. Click Generate from AI Update to create the first saved pack.
+          </div>
+        )}
         {filtered.map((pack) => (
           <button
             key={pack.id}
@@ -252,126 +226,85 @@ export function FeedView() {
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="rounded-xl border border-[#222222] bg-[#0b0b0b] p-3">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#666666]">Impact</p>
-                <p className="mt-1 text-lg font-semibold text-white">{pack.impact_score || 88}</p>
+                <p className="mt-1 text-lg font-semibold text-white">{pack.impact_score || 0}</p>
+              </div>
+              <div className="rounded-xl border border-[#222222] bg-[#0b0b0b] p-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#666666]">Story</p>
+                <p className="mt-1 text-lg font-semibold text-white">{pack.story_score || 0}</p>
               </div>
               <div className="rounded-xl border border-[#222222] bg-[#0b0b0b] p-3">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[#666666]">Formats</p>
                 <p className="mt-1 text-lg font-semibold text-white">5</p>
               </div>
-              <div className="rounded-xl border border-[#222222] bg-[#0b0b0b] p-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#666666]">Audience</p>
-                <p className="mt-1 truncate text-xs font-semibold text-white">{pack.audience}</p>
-              </div>
             </div>
-            <div className="mt-4 flex items-center justify-between border-t border-[#222222] pt-3 text-[11px] text-[#666666]">
-              <span>{pack.theme}</span>
-              <span className="text-[#c9a84c] opacity-0 transition-opacity group-hover:opacity-100">Open pack</span>
-            </div>
+            <p className="mt-4 text-[11px] text-[#666666]">Source date: {pack.source_date || 'Verified in generation'}</p>
           </button>
         ))}
       </div>
 
-      {filtered.length === 0 && (
-        <div className="rounded-2xl border border-[#222222] bg-[#111111] py-12 text-center text-sm text-[#666666]">
-          No content packs match your search.
-        </div>
-      )}
-
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
-        <DialogContent className="border-[#2a2416] bg-[#0d0d0d] text-white sm:max-w-lg">
+        <DialogContent className="max-w-2xl border-[#2a2416] bg-[#0d0d0d] text-white">
           <DialogHeader>
-            <DialogTitle className="text-xl">Generate from AI Update</DialogTitle>
+            <DialogTitle>Generate from AI Update</DialogTitle>
             <DialogDescription className="text-[#a0a0a0]">
-              Enter a theme. The pipeline finds recent AI updates, filters for operator value, then writes the pack.
+              The backend will find one real AI update from the last 14 days, create the pack, run checks, and save it.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[#666666]">Theme</label>
+              <label className="text-xs uppercase tracking-[0.18em] text-[#666666]">Theme</label>
               <Input
                 value={theme}
                 onChange={(event) => setTheme(event.target.value)}
-                className="border-[#222222] bg-[#090909] text-white"
-                placeholder="AI tools for content creators"
+                className="mt-2 rounded-xl border-[#222222] bg-[#111111] text-white"
               />
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[#666666]">Style</label>
-              <select
-                value={style}
-                onChange={(event) => setStyle(event.target.value as ContentPack['style'])}
-                className="h-10 w-full rounded-md border border-[#222222] bg-[#090909] px-3 text-sm text-white outline-none focus:border-[#c9a84c]"
-              >
-                <option value="ai_news">ai_news</option>
-                <option value="workflow">workflow</option>
-                <option value="system">system</option>
-              </select>
+              <label className="text-xs uppercase tracking-[0.18em] text-[#666666]">Style</label>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {(['ai_news', 'workflow', 'system'] as ContentPack['style'][]).map((item) => (
+                  <Button
+                    key={item}
+                    variant="outline"
+                    className={`rounded-xl border-[#222222] ${style === item ? 'bg-[#c9a84c] text-black hover:bg-[#d8ba62]' : 'bg-[#111111] text-[#a0a0a0]'}`}
+                    onClick={() => setStyle(item)}
+                  >
+                    {styleLabels[item]}
+                  </Button>
+                ))}
+              </div>
             </div>
-            {error && <p className="rounded-lg border border-[#ef4444]/40 bg-[#ef4444]/10 p-3 text-xs text-[#fca5a5]">{error}</p>}
+            <div>
+              <label className="text-xs uppercase tracking-[0.18em] text-[#666666]">Audience</label>
+              <Textarea
+                value={settings.audience || defaultSettings.audience}
+                readOnly
+                className="mt-2 h-20 resize-none rounded-xl border-[#222222] bg-[#111111] text-white"
+              />
+            </div>
             <Button
-              className="h-11 w-full rounded-full bg-[#c9a84c] text-sm font-semibold text-black hover:bg-[#d8ba62]"
+              className="h-11 w-full rounded-full bg-[#c9a84c] font-semibold text-black hover:bg-[#d8ba62]"
               onClick={generatePack}
               disabled={isGenerating}
             >
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-              {isGenerating ? 'Generating pack...' : 'Run Content Pipeline'}
+              {isGenerating ? 'Running backend pipeline...' : 'Generate from AI Update'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!selectedPack} onOpenChange={(open) => !open && setSelectedPackId(null)}>
-        {selectedPack && (
-          <DialogContent className="max-h-[92vh] overflow-hidden border-[#2a2416] bg-[#0d0d0d] p-0 text-white sm:max-w-5xl">
-            <div className="border-b border-[#222222] bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.14),transparent_36%),#0d0d0d] p-5">
-              <DialogHeader>
-                <DialogTitle className="text-2xl tracking-tight">{selectedPack.long_post.title}</DialogTitle>
-                <DialogDescription className="text-[#a0a0a0]">
-                  {selectedPack.tool_name} sourced from{' '}
-                  <a className="text-[#c9a84c] underline-offset-4 hover:underline" href={selectedPack.source_url} target="_blank" rel="noreferrer">
-                    original update <ExternalLink className="inline h-3 w-3" />
-                  </a>
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-            <Tabs defaultValue="long" className="flex min-h-0 flex-1 flex-col p-5">
-              <TabsList className="mb-4 grid h-auto grid-cols-5 rounded-full border border-[#222222] bg-[#080808] p-1">
-                <TabsTrigger value="long" className="rounded-full text-xs">Long Post</TabsTrigger>
-                <TabsTrigger value="x" className="rounded-full text-xs">X Thread</TabsTrigger>
-                <TabsTrigger value="ig" className="rounded-full text-xs">IG Caption</TabsTrigger>
-                <TabsTrigger value="carousel" className="rounded-full text-xs">Carousel</TabsTrigger>
-                <TabsTrigger value="script" className="rounded-full text-xs">Script</TabsTrigger>
-              </TabsList>
-              {['long', 'x', 'ig', 'carousel', 'script'].map((section) => (
-                <TabsContent key={section} value={section} className="mt-0 min-h-0">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#666666]">Review, edit, or copy this section</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 border-[#c9a84c] text-[#c9a84c] hover:bg-[#c9a84c]/10"
-                      onClick={() => handleCopy(selectedPack, section)}
-                    >
-                      <Copy className="mr-1 h-3 w-3" /> Copy
-                    </Button>
-                  </div>
-                  <Textarea
-                    value={contentPackToText(selectedPack, section)}
-                    onChange={(event) => handleUpdatePack(updatePackSection(selectedPack, section, event.target.value))}
-                    className="min-h-[52vh] resize-none border-[#222222] bg-[#080808] font-mono text-xs leading-6 text-[#d7d7d7] focus-visible:ring-[#c9a84c]"
-                  />
-                </TabsContent>
-              ))}
-            </Tabs>
-          </DialogContent>
-        )}
-      </Dialog>
+      <ContentPackDetailDialog
+        pack={selectedPack}
+        open={!!selectedPack}
+        onOpenChange={(open) => !open && setSelectedPackId(null)}
+        onUpdate={handleUpdatePack}
+        onCopy={(pack) => handleCopy(pack)}
+      />
 
       {toast.visible && (
-        <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 transform lg:bottom-8">
-          <div className="flex items-center gap-2 rounded-full border border-[#c9a84c] bg-[#111111] px-4 py-3 shadow-lg">
-            <span className="text-sm font-medium text-white">{toast.message}</span>
-          </div>
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[#c9a84c]/40 bg-[#111111] px-4 py-2 text-sm text-white shadow-2xl">
+          {toast.message}
         </div>
       )}
     </div>
