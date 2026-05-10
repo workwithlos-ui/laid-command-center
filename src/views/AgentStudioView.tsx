@@ -6,6 +6,7 @@ const agentProfiles = [
   {
     id: 'strategist',
     name: 'Content Strategist',
+    oneLiner: 'Picks the best topic for your audience based on gaps and trends',
     role: 'Defines the angle, audience promise, and narrative thesis before content is written.',
     icon: Compass,
     score: 94,
@@ -19,7 +20,8 @@ const agentProfiles = [
   },
   {
     id: 'research',
-    name: 'Research / News Finder',
+    name: 'Research Agent',
+    oneLiner: 'Scans AI news and GitHub trending to find real updates from the last 14 days',
     role: 'Extracts what changed, why it matters, and which proof points deserve attention.',
     icon: FileSearch,
     score: 91,
@@ -34,6 +36,7 @@ const agentProfiles = [
   {
     id: 'relevance',
     name: 'Relevance Filter',
+    oneLiner: 'Scores each update for your specific audience and picks the winner',
     role: 'Decides whether an idea is worth turning into content for this audience.',
     icon: Filter,
     score: 89,
@@ -47,7 +50,8 @@ const agentProfiles = [
   },
   {
     id: 'writer',
-    name: 'Long-Post Writer',
+    name: 'Writing Agent',
+    oneLiner: 'Writes the long-form post in your voice with real tools, real numbers, real steps',
     role: 'Writes the core long-form asset with hook, narrative, framework, and CTA.',
     icon: PenLine,
     score: 92,
@@ -61,7 +65,8 @@ const agentProfiles = [
   },
   {
     id: 'repurposer',
-    name: 'Repurposer',
+    name: 'Repurposer Agent',
+    oneLiner: 'Turns the long post into X thread, IG caption, carousel, script, and LinkedIn',
     role: 'Transforms the core asset into X threads, Instagram captions, carousels, scripts, and LinkedIn variants.',
     icon: Layers3,
     score: 90,
@@ -75,7 +80,8 @@ const agentProfiles = [
   },
   {
     id: 'editor',
-    name: 'Editor Quality Gate',
+    name: 'Editor Agent',
+    oneLiner: 'Runs a 40-point quality check and auto-rewrites anything below standard',
     role: 'Runs the final pass for clarity, originality, specificity, brand fit, and publishability.',
     icon: ShieldCheck,
     score: 96,
@@ -110,14 +116,30 @@ export function AgentStudioView() {
         <p className="text-[11px] uppercase tracking-[0.28em] text-[#22D3EE]">Agent Studio</p>
         <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-4xl font-semibold tracking-[-0.04em] text-[#F8FAFC] md:text-5xl">Your six-agent content team.</h2>
+            <h2 className="text-4xl font-semibold tracking-[-0.04em] text-[#F8FAFC] md:text-5xl">Your AI Content Team</h2>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-[#A1A1AA]">
-              Each agent owns a distinct decision layer. Together they behave like a real editorial team: strategy, research, filtering, writing, repurposing, and final quality control.
+              6 agents that research, write, edit, and repurpose your content. Click any agent to see how it thinks and what it learned.
             </p>
           </div>
           <div className="rounded-[22px] border border-white/10 bg-white/[0.045] p-4 text-right">
             <div className="text-2xl font-semibold text-[#F8FAFC]">92%</div>
             <div className="text-xs text-[#71717A]">Average team quality</div>
+          </div>
+        </div>
+      </section>
+
+
+      <section className="obsidian-card rounded-[24px] p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[#F8C471]">How this works</p>
+            <h3 className="mt-2 text-xl font-semibold text-[#F8FAFC]">These agents run automatically when you hit Generate.</h3>
+            <p className="mt-3 max-w-4xl text-sm leading-6 text-[#A1A1AA]">
+              They get smarter over time as you generate more packs. Update Brand Memory to train them on your voice and winning patterns.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3 text-sm text-[#22D3EE]">
+            Generate → Research → Write → Edit → Repurpose
           </div>
         </div>
       </section>
@@ -140,7 +162,8 @@ export function AgentStudioView() {
                 </div>
                 <div className="rounded-full border border-white/10 bg-white/[0.045] px-2.5 py-1 text-xs text-[#22D3EE]">{agent.score}</div>
               </div>
-              <p className="mt-4 line-clamp-2 text-sm leading-6 text-[#A1A1AA]">{agent.role}</p>
+              <p className="mt-4 text-sm font-medium leading-6 text-[#F8FAFC]">{agent.oneLiner}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#A1A1AA]">{agent.role}</p>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl bg-white/[0.035] p-3">
                   <div className="text-lg font-semibold text-[#F8FAFC]">{agent.tasks}</div>
@@ -167,7 +190,13 @@ export function AgentStudioView() {
               <p className="text-xs text-[#71717A]">Quality score {selected.score} · {selected.tasks} tasks completed</p>
             </div>
           </div>
-          <p className="mt-5 text-sm leading-6 text-[#A1A1AA]">{selected.role}</p>
+          <div className="mt-5 space-y-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-[#71717A]">What it does</p>
+              <p className="mt-2 text-sm font-medium leading-6 text-[#F8FAFC]">{selected.oneLiner}</p>
+            </div>
+            <p className="text-sm leading-6 text-[#A1A1AA]">{selected.role}</p>
+          </div>
           <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#F8FAFC]"><Zap className="h-4 w-4 text-[#F8C471]" /> Last action</div>
             <p className="mt-2 text-sm leading-6 text-[#A1A1AA]">{selected.lastAction}</p>
@@ -175,12 +204,12 @@ export function AgentStudioView() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <DetailBlock icon={Target} title="Inputs" items={selected.inputs} />
-          <DetailBlock icon={CheckCircle2} title="Decision rules" items={selected.rules} />
+          <DetailBlock icon={Target} title="What it looks at" items={selected.inputs} />
+          <DetailBlock icon={CheckCircle2} title="How it decides" items={selected.rules} />
           <DetailBlock icon={RefreshCw} title="Current weakness" items={[selected.weakness]} />
-          <DetailBlock icon={History} title="Learning history" items={learningHistory} />
+          <DetailBlock icon={History} title="What it learned recently" items={learningHistory} />
           <div className="obsidian-elevated rounded-[24px] p-5 md:col-span-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#F8FAFC]"><Sparkles className="h-4 w-4 text-[#22D3EE]" /> Recommended training</div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#F8FAFC]"><Sparkles className="h-4 w-4 text-[#22D3EE]" /> What would make it better</div>
             <p className="mt-3 text-sm leading-6 text-[#A1A1AA]">{selected.training}</p>
           </div>
         </div>

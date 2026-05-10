@@ -80,6 +80,9 @@ function createCustomCandidate(customPrompt: string, sourceUrl: string): NewsCan
     publish_date: new Date().toISOString().slice(0, 10),
     summary: customPrompt,
     why_it_matters: customPrompt,
+    supply_demand_gap_score: 10,
+    creator_duplication_notes: 'User-provided prompt, no creator duplication check needed.',
+    contrarian_angle: 'Turn the user prompt into a practical operator playbook.',
     founder_use_cases: [customPrompt, 'Turn the update into a practical workflow.', 'Use it as a source-backed operator playbook.'],
     freshness_score: 10,
     workflow_impact_score: 10,
@@ -179,7 +182,7 @@ export async function runPipeline(
 
   const writerStage = startStage(stageLogs, 'long_post_writer');
   onProgress({ stage: 'writing', message: `Agent 4: Long-Post Writer is writing the ${style.replace('_', ' ')} post...` });
-  const writerPrompt = buildLongPostWriterPrompt(selected, style, audience, theme, strategy, newsResult.data.source_brief, memoryAddendum, options.voiceTraining);
+  const writerPrompt = buildLongPostWriterPrompt(selected, style, audience, theme, strategy, newsResult.data!.source_brief, memoryAddendum, options.voiceTraining);
   const writerResult = await callAgent<LongPostOutput>(openaiConfig, writerPrompt, { isWriter: true, label: 'long_post_writer' });
   if (!writerResult.success || !writerResult.data?.body_markdown) {
     return fail(stageLogs, writerStage, onProgress, `Agent 4 failed: ${writerResult.error || 'missing long post'}`, totalTokens);
@@ -212,11 +215,11 @@ export async function runPipeline(
     return fail(stageLogs, repurposeStage, onProgress, `Agent 5 failed: ${repurposerResult.error || 'missing repurposed assets'}`, totalTokens);
   }
   totalTokens += repurposerResult.tokensUsed || 0;
-  const repurposed = repurposerResult.data;
+  let repurposed = repurposerResult.data;
   finishStage(stageLogs, repurposeStage, 'done', repurposerResult.data, repurposerResult.tokensUsed);
 
   const slug = safeSlug(selected.tool_name);
-  const packDraft: ContentPack = {
+  const buildPackDraft = (): ContentPack => ({
     id: `${slug}-${selected.publish_date || new Date().toISOString().slice(0, 10)}-${Date.now().toString(36)}`,
     tool_name: selected.tool_name,
     source_url: selected.source_url,
@@ -232,31 +235,69 @@ export async function runPipeline(
     carousel: repurposed.carousel,
     short_script: repurposed.short_script,
     strategy,
-    source_brief: newsResult.data.source_brief,
+    source_brief: newsResult.data!.source_brief,
     agent_log: stageLogs.map((log) => ({ agent: log.stage, summary: log.status, score: log.stage === 'deterministic_quality_gate' ? Math.round(qualityReport.score / 2.5) : undefined })),
-  };
+  });
+  let packDraft: ContentPack = buildPackDraft();
 
   const editorStage = startStage(stageLogs, 'editor_quality_gate');
-  onProgress({ stage: 'editing', message: 'Agent 6: Editor is running the six gates and Elios critique...' });
-  const editorResult = await callAgent<EditorOutput>(openaiConfig, buildEditorPrompt(packDraft, qualityReport, newsResult.data.source_brief), { label: 'editor_quality_gate' });
-  if (editorResult.success && editorResult.data) {
-    totalTokens += editorResult.tokensUsed || 0;
-    packDraft.editor_review = editorResult.data;
-    packDraft.critic_score = editorResult.data.critic_score;
+  onProgress({ stage: 'editing', message: 'Agent 6: Editor is running pass 1 of the 40-point quality gate...' });
+  const editorFirstResult = await callAgent<EditorOutput>(openaiConfig, buildEditorPrompt(packDraft, qualityReport, newsResult.data!.source_brief, 1), { label: 'editor_quality_gate_pass_1' });
+  if (editorFirstResult.success && editorFirstResult.data) {
+    totalTokens += editorFirstResult.tokensUsed || 0;
+    const firstScore = editorFirstResult.data.total_points ?? editorFirstResult.data.critic_score;
+    const needsRewrite = editorFirstResult.data.decision === 'REJECT' || editorFirstResult.data.rewrite_required || firstScore < 28;
+    if (needsRewrite) {
+      onProgress({ stage: 'editing', message: `Agent 6: pass 1 scored ${firstScore}/40. Sending precise fix notes back to the Writer...` });
+      const fixNotes = [
+        ...(editorFirstResult.data.writer_fix_notes || []),
+        ...(editorFirstResult.data.revision_notes || []),
+      ].filter(Boolean).join('\n- ');
+      const rewritePrompt = buildLongPostWriterPrompt(
+        selected,
+        style,
+        audience,
+        theme,
+        strategy,
+        newsResult.data!.source_brief,
+        `${memoryAddendum}\nEDITOR PASS 1 FIX NOTES, rewrite the long post and fix every item:\n- ${fixNotes || 'Raise the post above 28/40 and remove all hard fails.'}`,
+        options.voiceTraining
+      );
+      const rewriteResult = await callAgent<LongPostOutput>(openaiConfig, rewritePrompt, { isWriter: true, label: 'editor_directed_rewrite' });
+      if (rewriteResult.success && rewriteResult.data?.body_markdown) {
+        longPost = rewriteResult.data;
+        totalTokens += rewriteResult.tokensUsed || 0;
+        qualityReport = runQualityGate(longPost.body_markdown);
+        const repurposeRewrite = await callAgent<RepurposerOutput>(openaiConfig, buildRepurposerPrompt(longPost, strategy, memoryAddendum), { label: 'repurposer_after_editor_rewrite' });
+        if (repurposeRewrite.success && repurposeRewrite.data) {
+          repurposed = repurposeRewrite.data;
+          totalTokens += repurposeRewrite.tokensUsed || 0;
+        }
+        packDraft = buildPackDraft();
+      }
+    }
+
+    onProgress({ stage: 'editing', message: 'Agent 6: Editor is running pass 2 to confirm fixes...' });
+    const editorSecondResult = await callAgent<EditorOutput>(openaiConfig, buildEditorPrompt(packDraft, qualityReport, newsResult.data!.source_brief, 2), { label: 'editor_quality_gate_pass_2' });
+    const finalEditor = editorSecondResult.success && editorSecondResult.data ? editorSecondResult.data : editorFirstResult.data;
+    totalTokens += editorSecondResult.tokensUsed || 0;
+    packDraft.editor_review = { first_pass: editorFirstResult.data, second_pass: editorSecondResult.data || null, final: finalEditor };
+    packDraft.critic_score = finalEditor.total_points ?? finalEditor.critic_score;
     packDraft.quality_score = qualityReport.score;
     packDraft.agent_log = [
       ...(packDraft.agent_log || []),
-      { agent: 'editor_quality_gate', summary: editorResult.data.approved_summary || editorResult.data.decision, score: editorResult.data.critic_score },
+      { agent: 'editor_quality_gate_pass_1', summary: editorFirstResult.data.approved_summary || editorFirstResult.data.decision, score: editorFirstResult.data.total_points ?? editorFirstResult.data.critic_score },
+      { agent: 'editor_quality_gate_pass_2', summary: finalEditor.approved_summary || finalEditor.decision, score: finalEditor.total_points ?? finalEditor.critic_score },
     ];
-    finishStage(stageLogs, editorStage, editorResult.data.decision === 'REJECT' ? 'error' : 'done', editorResult.data, editorResult.tokensUsed);
+    finishStage(stageLogs, editorStage, finalEditor.decision === 'REJECT' ? 'error' : 'done', packDraft.editor_review, (editorFirstResult.tokensUsed || 0) + (editorSecondResult.tokensUsed || 0));
   } else {
     packDraft.quality_score = qualityReport.score;
     packDraft.critic_score = Math.round(qualityReport.score / 2.5);
     packDraft.agent_log = [
       ...(packDraft.agent_log || []),
-      { agent: 'editor_quality_gate', summary: editorResult.error || 'Editor unavailable, deterministic gate used.', score: packDraft.critic_score },
+      { agent: 'editor_quality_gate', summary: editorFirstResult.error || 'Editor unavailable, deterministic gate used.', score: packDraft.critic_score },
     ];
-    finishStage(stageLogs, editorStage, 'error', editorResult.error || 'Editor unavailable');
+    finishStage(stageLogs, editorStage, 'error', editorFirstResult.error || 'Editor unavailable');
   }
 
   onProgress({ stage: 'complete', message: 'Six-agent content pack ready.', pack: packDraft });
