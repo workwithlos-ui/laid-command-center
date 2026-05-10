@@ -20,6 +20,14 @@ const styleLabels: Record<ContentPack['style'], string> = {
   system: 'System',
 };
 
+type GenerationSource = 'llm' | 'github' | 'both';
+
+const sourceLabels: Record<GenerationSource, string> = {
+  llm: 'AI News (LLM)',
+  github: 'GitHub Trending',
+  both: 'Both',
+};
+
 const defaultSettings: CommandCenterSettings = {
   openaiApiKey: '',
   perplexityApiKey: '',
@@ -43,6 +51,7 @@ export function FeedView() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [theme, setTheme] = useState('AI tools for 500k-10M founders');
   const [style, setStyle] = useState<ContentPack['style']>(settings.defaultStyle);
+  const [source, setSource] = useState<GenerationSource>('both');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -112,6 +121,7 @@ export function FeedView() {
           apiKey: settings.openaiApiKey || undefined,
           theme,
           style,
+          source,
           audience: settings.audience || defaultSettings.audience,
         }),
       });
@@ -273,6 +283,24 @@ export function FeedView() {
                   </Button>
                 ))}
               </div>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-[0.18em] text-[#666666]">Source</label>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {(['llm', 'github', 'both'] as GenerationSource[]).map((item) => (
+                  <Button
+                    key={item}
+                    variant="outline"
+                    className={`rounded-xl border-[#222222] ${source === item ? 'bg-[#c9a84c] text-black hover:bg-[#d8ba62]' : 'bg-[#111111] text-[#a0a0a0]'}`}
+                    onClick={() => setSource(item)}
+                  >
+                    {sourceLabels[item]}
+                  </Button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#666666]">
+                GitHub Trending pulls real AI and dev-tool repos from GitHub search. Both merges sources before scoring.
+              </p>
             </div>
             <div>
               <label className="text-xs uppercase tracking-[0.18em] text-[#666666]">Audience</label>
