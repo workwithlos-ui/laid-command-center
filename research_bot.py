@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LAID Daily Research Bot , AI News Scanner & Content Drafter
+LAID Daily Research Bot — AI News Scanner & Content Drafter
 Scans AI news sources, scores by business relevance, drafts content pieces.
 
 Usage:
@@ -232,7 +232,7 @@ def draft_content_piece(story, tone="pro"):
 
     if tone == "beginner":
         hook_templates = {
-            "LEADS": f"Want more leads but hate marketing jargon? {title.split(',')[0].strip()} makes it simple.",
+            "LEADS": f"Want more leads but hate marketing jargon? {title.split('—')[0].strip()} makes it simple.",
             "AUTOMATE": f"What if {source} could handle your busy work while you focus on clients? Here's how.",
             "CREATE": f"Need professional documents fast? This new feature does the formatting for you.",
             "CODE": f"Always wanted an app for your business? Now you can build one without coding.",
@@ -245,19 +245,19 @@ def draft_content_piece(story, tone="pro"):
         }
     else:
         hook_templates = {
-            "LEADS": f"{title.split(',')[0].strip()} , Here's how to use it to cut lead costs 30%.",
-            "AUTOMATE": f"{title.split(',')[0].strip()} , 3 automations that replace $3,500/mo of manual work.",
-            "CREATE": f"{title.split(',')[0].strip()} , How to replace 2 hours of formatting with 4 minutes.",
-            "CODE": f"{title.split(',')[0].strip()} , Built my first app in 45 minutes. $7 total.",
-            "RESEARCH": f"{title.split(',')[0].strip()} , Your competitor's AI is doing this automatically already.",
-            "TALK": f"{title.split(',')[0].strip()} , $800 voiceover projects now cost $0.",
-            "ADS": f"{title.split(',')[0].strip()} , 20 ad variations in 20 minutes using real customer language.",
-            "TEAM": f"{title.split(',')[0].strip()} , Found 14 vulnerabilities my team missed. Free.",
-            "MONEY": f"{title.split(',')[0].strip()} , $3,688/month in tool savings from 2 updates.",
-            "LAID": f"{title.split(',')[0].strip()} , Stop renting AI. Own it."
+            "LEADS": f"{title.split('—')[0].strip()} — Here's how to use it to cut lead costs 30%.",
+            "AUTOMATE": f"{title.split('—')[0].strip()} — 3 automations that replace $3,500/mo of manual work.",
+            "CREATE": f"{title.split('—')[0].strip()} — How to replace 2 hours of formatting with 4 minutes.",
+            "CODE": f"{title.split('—')[0].strip()} — Built my first app in 45 minutes. $7 total.",
+            "RESEARCH": f"{title.split('—')[0].strip()} — Your competitor's AI is doing this automatically already.",
+            "TALK": f"{title.split('—')[0].strip()} — $800 voiceover projects now cost $0.",
+            "ADS": f"{title.split('—')[0].strip()} — 20 ad variations in 20 minutes using real customer language.",
+            "TEAM": f"{title.split('—')[0].strip()} — Found 14 vulnerabilities my team missed. Free.",
+            "MONEY": f"{title.split('—')[0].strip()} — $3,688/month in tool savings from 2 updates.",
+            "LAID": f"{title.split('—')[0].strip()} — Stop renting AI. Own it."
         }
 
-    hook = hook_templates.get(keyword, f"{title} , Here's what business owners need to know.")
+    hook = hook_templates.get(keyword, f"{title} — Here's what business owners need to know.")
 
     return {
         "id": f"draft_{datetime.now().strftime('%Y%m%d')}_{hash(title) % 10000:04d}",
@@ -271,7 +271,7 @@ def draft_content_piece(story, tone="pro"):
         "tone": tone,
         "categories": categories,
         "status": "draft",
-        "body_preview": f"**Hook:** {hook}\n\n**Source:** {source} , {date}\n**Relevance Score:** {score}/10\n**Categories:** {', '.join(categories)}\n\n[Full content to be expanded after approval]",
+        "body_preview": f"**Hook:** {hook}\n\n**Source:** {source} — {date}\n**Relevance Score:** {score}/10\n**Categories:** {', '.join(categories)}\n\n[Full content to be expanded after approval]",
         "created_at": datetime.now().isoformat()
     }
 
@@ -376,7 +376,7 @@ def load_existing_content():
 def cmd_run():
     """Execute a full research run."""
     print("\n" + "=" * 60)
-    print("LAID DAILY RESEARCH BOT , Scanning AI News")
+    print("LAID DAILY RESEARCH BOT — Scanning AI News")
     print("=" * 60 + "\n")
 
     queue = load_queue()
@@ -446,7 +446,7 @@ def cmd_review():
         return
 
     print("\n" + "=" * 60)
-    print("CONTENT QUEUE , Drafts Awaiting Review")
+    print("CONTENT QUEUE — Drafts Awaiting Review")
     print("=" * 60 + "\n")
 
     for i, draft in enumerate(queue["drafts"], 1):
@@ -454,7 +454,7 @@ def cmd_review():
         print(f"{status_icon} [{i}] {draft['title'][:60]}")
         print(f"     Keyword: {draft['keyword']} | Tone: {draft['tone']} | Score: {draft['relevance_score']}/10")
         print(f"     Hook: {draft['hook'][:70]}...")
-        print(f"     Source: {draft['source']} , {draft['date']}")
+        print(f"     Source: {draft['source']} — {draft['date']}")
         print()
 
     print(f"Total: {len(queue['drafts'])} drafts")

@@ -1,4 +1,4 @@
-# Strategic Plan , LAID Command Center Future
+# Strategic Plan — LAID Command Center Future
 
 ## 1. Well-Designed Carousels (No AI Slop)
 
@@ -10,8 +10,8 @@ AI-generated carousels look like AI slop because:
 - No brand cohesion
 - Stock imagery that screams "AI generated"
 
-### The Solution , Swiss Grid + Hand-Crafted Design System
-Instead of generating images, we build a **design system** , like a real design agency would.
+### The Solution — Swiss Grid + Hand-Crafted Design System
+Instead of generating images, we build a **design system** — like a real design agency would.
 
 **What we'd build:**
 - 5 carousel templates per format (problem/solution, listicle, story, comparison, how-to)
@@ -25,7 +25,7 @@ Instead of generating images, we build a **design system** , like a real design 
 **How it renders:**
 - HTML/CSS carousels rendered as images (Puppeteer/Playwright screenshot)
 - Each slide is a React component with exact pixel placement
-- Not "AI generated" , **system generated** from hand-crafted templates
+- Not "AI generated" — **system generated** from hand-crafted templates
 - The content fills the template; the design stays perfect
 
 **Quality control:**
@@ -48,7 +48,7 @@ Slide 7: CTA slide with DM keyword
 
 ---
 
-## 2. Daily Updates , How This Actually Works
+## 2. Daily Updates — How This Actually Works
 
 ### Option A: Semi-Automated (Recommended)
 **What you'd do every morning (10 minutes):**
@@ -210,11 +210,11 @@ Sales Agent: Manages prospect pipeline, suggests follow-ups, logs interactions
 ```
 
 ### What You Can Do Right Now to Make This Better
-1. **Save our conversations** , I learn from your corrections. The more feedback, the better the output.
-2. **Show me examples** , Send me links to posts you love. I'll extract the patterns.
-3. **Track what works** , Tell me "this post got 3 DMs" or "this one flopped." I'll adjust.
-4. **Iterate fast** , Don't settle for "okay." Tell me exactly what's wrong. I fix it.
-5. **Build the library** , Every piece we write that's great becomes a template. Over time, the system becomes YOU.
+1. **Save our conversations** — I learn from your corrections. The more feedback, the better the output.
+2. **Show me examples** — Send me links to posts you love. I'll extract the patterns.
+3. **Track what works** — Tell me "this post got 3 DMs" or "this one flopped." I'll adjust.
+4. **Iterate fast** — Don't settle for "okay." Tell me exactly what's wrong. I fix it.
+5. **Build the library** — Every piece we write that's great becomes a template. Over time, the system becomes YOU.
 
 ---
 

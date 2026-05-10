@@ -1,8 +1,8 @@
 # LAID Command Center
 
 **LAID** = Leverage Artificial Intelligence Daily  
-**Built for:** Los Silva (@loshustle) , AI Consultant, Orlando FL  
-**Product:** AIDS (AI Delivered Systems) , $2,500-$10,000 consulting
+**Built for:** Los Silva (@loshustle) — AI Consultant, Orlando FL  
+**Product:** AIDS (AI Delivered Systems) — $2,500-$10,000 consulting
 
 A content marketing system and sales command center for business owners doing $500K-$10M in home services, DTC, and agencies.
 
@@ -42,7 +42,7 @@ npm run build
 
 ## Content System
 
-**15 Topics (v8 , May 2026):**
+**15 Topics (v8 — May 2026):**
 
 | Keyword | Tool | Headline |
 |---------|------|----------|
@@ -187,6 +187,6 @@ git push -u origin main
 
 ## License
 
-MIT , Use it, sell it, white-label it.
+MIT — Use it, sell it, white-label it.
 
 Built by Los Silva. Powered by AI.
