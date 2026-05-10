@@ -1,36 +1,9 @@
-import { useState, useCallback } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { useCallback, useState, type ElementType, type ReactNode } from 'react';
+import { CheckCircle, Copy, ExternalLink, FileText, Image, Instagram, Linkedin, Trash2, Twitter, Video } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '@/components/ui/tabs';
-import {
-  Copy,
-  CheckCircle,
-  ExternalLink,
-  Trash2,
-  FileText,
-  Twitter,
-  Instagram,
-  Image,
-  Video,
-} from 'lucide-react';
-import {
-  type ContentPack,
-  type ContentStyle,
-  type OutputFormat,
-  formatLabels,
-} from '@/data/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { ContentPack, ContentStyle, OutputFormat } from '@/data/types';
 import { renderMarkdown } from '@/lib/mdrender';
 
 export interface PackDetailModalProps {
@@ -41,420 +14,204 @@ export interface PackDetailModalProps {
   onDelete: (id: string) => void;
 }
 
+type DetailTab = OutputFormat | 'linkedin';
+
 const styleBadgeConfig: Record<ContentStyle, { classes: string; label: string }> = {
-  ai_news: {
-    classes: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-    label: 'AI News',
-  },
-  workflow: {
-    classes: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-    label: 'Workflow',
-  },
-  system: {
-    classes: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-    label: 'System',
-  },
+  ai_news: { classes: 'border-[#A855F7]/35 bg-[#A855F7]/12 text-[#D8B4FE]', label: 'AI News' },
+  workflow: { classes: 'border-[#22D3EE]/35 bg-[#22D3EE]/12 text-[#67E8F9]', label: 'Workflow' },
+  system: { classes: 'border-[#F8C471]/35 bg-[#F8C471]/12 text-[#F8C471]', label: 'System' },
 };
 
-const tabConfig: { format: OutputFormat; label: string; Icon: React.ElementType }[] = [
+const tabConfig: { format: DetailTab; label: string; Icon: ElementType }[] = [
   { format: 'long_post', label: 'Long Post', Icon: FileText },
   { format: 'x_thread', label: 'X Thread', Icon: Twitter },
   { format: 'ig_caption', label: 'IG Caption', Icon: Instagram },
   { format: 'carousel', label: 'Carousel', Icon: Image },
-  { format: 'short_script', label: 'Short Script', Icon: Video },
+  { format: 'short_script', label: 'Script', Icon: Video },
+  { format: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
 ];
 
+const tabLabels: Record<DetailTab, string> = {
+  long_post: 'Long Post',
+  x_thread: 'X Thread',
+  ig_caption: 'IG Caption',
+  carousel: 'Carousel',
+  short_script: 'Script',
+  linkedin: 'LinkedIn',
+};
+
 function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getContentForFormat(pack: ContentPack, format: OutputFormat): string {
+function getContentForFormat(pack: ContentPack, format: DetailTab): string {
   switch (format) {
-    case 'long_post': {
-      const lp = pack.long_post;
-      return `${lp.title}\n\n${lp.body_markdown}`;
-    }
-    case 'x_thread': {
-      const xt = pack.x_thread;
-      return `${xt.hook}\n\n${xt.tweets.map((t, i) => `${i + 1}/ ${t}`).join('\n\n')}`;
-    }
-    case 'ig_caption': {
-      const ig = pack.ig_caption;
-      return `${ig.hook}\n\n${ig.body}\n\n${ig.cta}`;
-    }
-    case 'carousel': {
-      const car = pack.carousel;
-      return car.slides.map((s, i) => `Slide ${i + 1}: ${s.title}\n${s.bullets.map(b => `- ${b}`).join('\n')}`).join('\n\n');
-    }
-    case 'short_script': {
-      const ss = pack.short_script;
-      return `${ss.title}\n\n${ss.beats.map((b, i) => `[${(i + 1) * 8}s] ${b}`).join('\n')}`;
-    }
+    case 'long_post':
+      return `${pack.long_post.title}\n\n${pack.long_post.body_markdown}`;
+    case 'x_thread':
+      return `${pack.x_thread.hook}\n\n${pack.x_thread.tweets.map((tweet, index) => `${index + 1}/ ${tweet}`).join('\n\n')}`;
+    case 'ig_caption':
+      return `${pack.ig_caption.hook}\n\n${pack.ig_caption.body}\n\n${pack.ig_caption.cta}`;
+    case 'carousel':
+      return pack.carousel.slides.map((slide, index) => `Slide ${index + 1}: ${slide.title}\n${slide.bullets.map((bullet) => `- ${bullet}`).join('\n')}`).join('\n\n');
+    case 'short_script':
+      return `${pack.short_script.title}\n\n${pack.short_script.beats.map((beat, index) => `[${(index + 1) * 8}s] ${beat}`).join('\n')}`;
+    case 'linkedin':
+      return `${pack.long_post.title}\n\n${pack.x_thread.hook}\n\n${pack.long_post.body_markdown}\n\nCTA: Comment “SPRINT” if you want the workflow.`;
     default:
       return '';
   }
 }
 
-export function PackDetailModal({
-  pack,
-  open,
-  onOpenChange,
-  onTogglePosted,
-  onDelete,
-}: PackDetailModalProps) {
+export function PackDetailModal({ pack, open, onOpenChange, onTogglePosted, onDelete }: PackDetailModalProps) {
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<OutputFormat>('long_post');
+  const [activeTab, setActiveTab] = useState<DetailTab>('long_post');
 
-  const handleCopy = useCallback(
-    async (format: OutputFormat) => {
-      if (!pack) return;
-      const text = getContentForFormat(pack, format);
-      try {
-        await navigator.clipboard.writeText(text);
-        setCopiedFormat(format);
-        setTimeout(() => setCopiedFormat(null), 2000);
-      } catch (err) {
-        console.error('Failed to copy:', err);
-      }
-    },
-    [pack]
-  );
+  const handleCopy = useCallback(async (format: DetailTab) => {
+    if (!pack) return;
+    await navigator.clipboard.writeText(getContentForFormat(pack, format));
+    setCopiedFormat(format);
+    setTimeout(() => setCopiedFormat(null), 1600);
+  }, [pack]);
 
   const handleCopyAll = useCallback(async () => {
     if (!pack) return;
-    const lines: string[] = [];
-    for (const { format } of tabConfig) {
-      lines.push(`=== ${formatLabels[format]} ===`);
-      lines.push(getContentForFormat(pack, format));
-      lines.push('');
-    }
-    try {
-      await navigator.clipboard.writeText(lines.join('\n'));
-      setCopiedFormat('all');
-      setTimeout(() => setCopiedFormat(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy all:', err);
-    }
+    const text = tabConfig.map(({ format }) => `=== ${tabLabels[format]} ===\n${getContentForFormat(pack, format)}`).join('\n\n');
+    await navigator.clipboard.writeText(text);
+    setCopiedFormat('all');
+    setTimeout(() => setCopiedFormat(null), 1600);
   }, [pack]);
 
   if (!pack) return null;
 
-  const styleConfig = styleBadgeConfig[pack.style] || {
-    classes: 'bg-[#222222] text-[#a0a0a0] border-[#333333]',
-    label: pack.style,
-  };
+  const styleConfig = styleBadgeConfig[pack.style] || { classes: 'border-white/10 bg-white/[0.045] text-[#A1A1AA]', label: pack.style };
+  const score = pack.critic_score || pack.quality_score || 86;
 
-  const CopyButton = ({ format }: { format: OutputFormat }) => (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => handleCopy(format)}
-      className="text-[#666666] hover:text-[#c9a84c] hover:bg-[#1a1a1a] h-8 px-3"
-    >
-      {copiedFormat === format ? (
-        <>
-          <CheckCircle className="size-4 text-green-500" />
-          <span className="text-green-500">Copied</span>
-        </>
-      ) : (
-        <>
-          <Copy className="size-4" />
-          Copy
-        </>
-      )}
+  const CopyButton = ({ format }: { format: DetailTab }) => (
+    <Button variant="ghost" size="sm" onClick={() => handleCopy(format)} className="h-8 rounded-xl px-3 text-xs text-[#71717A] hover:bg-white/[0.06] hover:text-[#22D3EE]">
+      {copiedFormat === format ? <><CheckCircle className="mr-1 size-4 text-emerald-300" /> Copied</> : <><Copy className="mr-1 size-4" /> Copy</>}
     </Button>
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="bg-[#111111] border-[#222222] text-white max-w-4xl max-h-[90vh] p-0 overflow-hidden"
-        showCloseButton
-      >
-        {/* Header */}
-        <DialogHeader className="p-6 pb-0">
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden border-white/10 bg-[#101014]/95 p-0 text-[#F8FAFC] shadow-[0_32px_120px_rgba(0,0,0,0.62)] backdrop-blur-2xl" showCloseButton>
+        <DialogHeader className="border-b border-white/10 p-6 pb-5">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <DialogTitle className="text-white text-xl font-semibold leading-snug">
-                {pack.tool_name}
-              </DialogTitle>
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                <Badge
-                  variant="outline"
-                  className={`text-xs font-medium ${styleConfig.classes}`}
-                >
-                  {styleConfig.label}
-                </Badge>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full border px-3 py-1 text-[11px] font-medium ${styleConfig.classes}`}>{styleConfig.label}</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.045] px-3 py-1 text-[11px] text-[#22D3EE]">Quality {score}</span>
+                <span className="text-xs text-[#71717A]">{formatDate(pack.created_at)}</span>
                 {pack.source_url && (
-                  <a
-                    href={pack.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1 text-xs text-[#c9a84c] hover:underline transition-colors"
-                  >
-                    <ExternalLink className="size-3" />
-                    Source
+                  <a href={pack.source_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-[#F8C471] hover:underline">
+                    <ExternalLink className="size-3" /> Source
                   </a>
                 )}
-                <span className="text-xs text-[#666666]">
-                  {formatDate(pack.created_at)}
-                </span>
-                {pack.posted && (
-                  <Badge className="bg-green-500/15 text-green-400 border-green-500/25 text-xs">
-                    Posted
-                  </Badge>
-                )}
               </div>
+              <DialogTitle className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-[#F8FAFC]">{pack.tool_name}</DialogTitle>
+              <DialogDescription className="mt-3 text-sm leading-6 text-[#A1A1AA]">{pack.summary}</DialogDescription>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopyAll}
-              className="text-[#666666] hover:text-[#c9a84c] hover:bg-[#1a1a1a] h-8 px-3 shrink-0"
-            >
-              {copiedFormat === 'all' ? (
-                <>
-                  <CheckCircle className="size-4 text-green-500" />
-                  <span className="text-green-500">All Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="size-4" />
-                  Copy All
-                </>
-              )}
+            <Button variant="ghost" size="sm" onClick={handleCopyAll} className="h-9 shrink-0 rounded-xl bg-white/[0.045] px-3 text-xs text-[#A1A1AA] hover:bg-white/[0.075] hover:text-[#F8FAFC]">
+              {copiedFormat === 'all' ? <><CheckCircle className="mr-1 size-4 text-emerald-300" /> All Copied</> : <><Copy className="mr-1 size-4" /> Copy All</>}
             </Button>
           </div>
-
-          {/* Summary */}
-          <DialogDescription className="text-[#a0a0a0] italic text-sm mt-3 leading-relaxed">
-            &ldquo;{pack.summary}&rdquo;
-          </DialogDescription>
         </DialogHeader>
 
-        {/* Format Tabs */}
-        <div className="px-6 mt-4">
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as OutputFormat)}
-            className="w-full"
-          >
-            <TabsList className="bg-[#0a0a0a] border border-[#222222] w-full justify-start overflow-x-auto">
+        <div className="px-6 py-5">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as DetailTab)} className="w-full">
+            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#050508]/70 p-1">
               {tabConfig.map(({ format, label, Icon }) => (
-                <TabsTrigger
-                  key={format}
-                  value={format}
-                  className="data-[state=active]:bg-[#1a1a1a] data-[state=active]:text-[#c9a84c] data-[state=active]:border-[#c9a84c]/30 text-[#a0a0a0] border border-transparent text-xs px-3 py-1.5 gap-1.5"
-                >
+                <TabsTrigger key={format} value={format} className="gap-1.5 rounded-xl border border-transparent px-3 py-2 text-xs text-[#A1A1AA] data-[state=active]:border-[#A855F7]/30 data-[state=active]:bg-white/[0.075] data-[state=active]:text-[#F8FAFC]">
                   <Icon className="size-3.5" />
                   <span className="hidden sm:inline">{label}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
 
-            {/* Long Post Tab */}
-            <TabsContent value="long_post" className="mt-3 outline-none">
-              <div className="bg-[#0a0a0a] border border-[#222222] rounded-lg p-5 max-h-[50vh] overflow-y-auto">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <h4 className="text-white font-semibold text-lg">
-                    {pack.long_post.title}
-                  </h4>
-                  <CopyButton format="long_post" />
-                </div>
-                <div
-                  className="text-[#a0a0a0] text-sm leading-relaxed prose prose-invert prose-sm max-w-none
-                    [&_strong]:text-white [&_em]:italic [&_code]:bg-[#1a1a1a] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs
-                    [&_pre]:bg-[#1a1a1a] [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto
-                    [&_h4]:text-white [&_h4]:font-semibold [&_h4]:mt-4 [&_h4]:mb-2
-                    [&_hr]:border-[#222222] [&_hr]:my-4
-                    [&_li]:text-[#a0a0a0] [&_li]:text-sm"
-                  dangerouslySetInnerHTML={{
-                    __html: renderMarkdown(pack.long_post.body_markdown),
-                  }}
-                />
-              </div>
+            <TabsContent value="long_post" className="mt-4 outline-none">
+              <ContentPanel title={pack.long_post.title} action={<CopyButton format="long_post" />}>
+                <div className="content-body text-sm leading-7 text-[#A1A1AA]" dangerouslySetInnerHTML={{ __html: renderMarkdown(pack.long_post.body_markdown) }} />
+              </ContentPanel>
             </TabsContent>
 
-            {/* X Thread Tab */}
-            <TabsContent value="x_thread" className="mt-3 outline-none">
-              <div className="bg-[#0a0a0a] border border-[#222222] rounded-lg p-5 max-h-[50vh] overflow-y-auto">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="text-[#c9a84c] font-semibold text-sm italic leading-relaxed">
-                    &ldquo;{pack.x_thread.hook}&rdquo;
-                  </div>
-                  <CopyButton format="x_thread" />
-                </div>
-                <div className="flex flex-col gap-4">
-                  {pack.x_thread.tweets.map((tweet, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-3 p-3 rounded-md bg-[#111111] border border-[#1a1a1a]"
-                    >
-                      <span className="text-[#c9a84c] font-bold text-xs shrink-0 mt-0.5">
-                        {i + 1}/{pack.x_thread.tweets.length}
-                      </span>
-                      <p className="text-[#a0a0a0] text-sm leading-relaxed">
-                        {tweet}
-                      </p>
+            <TabsContent value="x_thread" className="mt-4 outline-none">
+              <ContentPanel title={pack.x_thread.hook} action={<CopyButton format="x_thread" />} accent>
+                <div className="space-y-3">
+                  {pack.x_thread.tweets.map((tweet, index) => (
+                    <div key={index} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-[#A1A1AA]">
+                      <span className="mr-2 font-semibold text-[#22D3EE]">{index + 1}/{pack.x_thread.tweets.length}</span>{tweet}
                     </div>
                   ))}
                 </div>
-              </div>
+              </ContentPanel>
             </TabsContent>
 
-            {/* IG Caption Tab */}
-            <TabsContent value="ig_caption" className="mt-3 outline-none">
-              <div className="bg-[#0a0a0a] border border-[#222222] rounded-lg p-5 max-h-[50vh] overflow-y-auto">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <span className="text-xs font-medium text-[#c9a84c] uppercase tracking-wide">
-                    IG Caption
-                  </span>
-                  <CopyButton format="ig_caption" />
-                </div>
-                {/* Hook */}
-                <div className="mb-4">
-                  <span className="text-xs font-medium text-[#666666] uppercase tracking-wide">
-                    Hook
-                  </span>
-                  <p className="text-white text-sm font-medium mt-1 leading-relaxed">
-                    {pack.ig_caption.hook}
-                  </p>
-                </div>
-                {/* Body */}
-                <div className="mb-4">
-                  <span className="text-xs font-medium text-[#666666] uppercase tracking-wide">
-                    Body
-                  </span>
-                  <p className="text-[#a0a0a0] text-sm mt-1 leading-relaxed whitespace-pre-wrap">
-                    {pack.ig_caption.body}
-                  </p>
-                </div>
-                {/* CTA */}
-                <div>
-                  <span className="text-xs font-medium text-[#666666] uppercase tracking-wide">
-                    CTA
-                  </span>
-                  <p className="text-[#c9a84c] text-sm font-medium mt-1 leading-relaxed">
-                    {pack.ig_caption.cta}
-                  </p>
-                </div>
-              </div>
+            <TabsContent value="ig_caption" className="mt-4 outline-none">
+              <ContentPanel title={pack.ig_caption.hook} action={<CopyButton format="ig_caption" />} accent>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-[#A1A1AA]">{pack.ig_caption.body}</p>
+                <p className="mt-5 rounded-2xl border border-[#A855F7]/25 bg-[#A855F7]/10 p-4 text-sm font-medium text-[#D8B4FE]">{pack.ig_caption.cta}</p>
+              </ContentPanel>
             </TabsContent>
 
-            {/* Carousel Tab */}
-            <TabsContent value="carousel" className="mt-3 outline-none">
-              <div className="bg-[#0a0a0a] border border-[#222222] rounded-lg p-5 max-h-[50vh] overflow-y-auto">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <span className="text-xs font-medium text-[#c9a84c] uppercase tracking-wide">
-                    Carousel Slides ({pack.carousel.slides.length})
-                  </span>
-                  <CopyButton format="carousel" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {pack.carousel.slides.map((slide, i) => (
-                    <div
-                      key={i}
-                      className="bg-[#111111] border border-[#1a1a1a] rounded-md p-4"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="bg-[#c9a84c] text-black text-xs font-bold rounded-full size-5 flex items-center justify-center shrink-0">
-                          {i + 1}
-                        </span>
-                        <h5 className="text-white font-medium text-sm leading-snug">
-                          {slide.title}
-                        </h5>
-                      </div>
-                      <ul className="space-y-1.5 ml-7">
-                        {slide.bullets.map((bullet, j) => (
-                          <li
-                            key={j}
-                            className="text-[#a0a0a0] text-xs leading-relaxed flex items-start gap-1.5"
-                          >
-                            <span className="text-[#666666] mt-0.5 shrink-0">
-                              &bull;
-                            </span>
-                            {bullet}
-                          </li>
-                        ))}
+            <TabsContent value="carousel" className="mt-4 outline-none">
+              <ContentPanel title="Carousel outline" action={<CopyButton format="carousel" />}>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {pack.carousel.slides.map((slide, index) => (
+                    <div key={index} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-[#22D3EE]">Slide {index + 1}</div>
+                      <h4 className="mt-2 text-sm font-semibold text-[#F8FAFC]">{slide.title}</h4>
+                      <ul className="mt-3 space-y-2 text-sm leading-5 text-[#A1A1AA]">
+                        {slide.bullets.map((bullet) => <li key={bullet}>• {bullet}</li>)}
                       </ul>
                     </div>
                   ))}
                 </div>
-              </div>
+              </ContentPanel>
             </TabsContent>
 
-            {/* Short Script Tab */}
-            <TabsContent value="short_script" className="mt-3 outline-none">
-              <div className="bg-[#0a0a0a] border border-[#222222] rounded-lg p-5 max-h-[50vh] overflow-y-auto">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <h4 className="text-white font-semibold text-base">
-                    {pack.short_script.title}
-                  </h4>
-                  <CopyButton format="short_script" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  {pack.short_script.beats.map((beat, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 p-2.5 rounded-md bg-[#111111] border border-[#1a1a1a]"
-                    >
-                      <span className="text-xs font-mono text-[#c9a84c] shrink-0 min-w-[36px] text-right pt-0.5">
-                        ~{(i + 1) * 8}s
-                      </span>
-                      <span className="text-[#666666] text-xs pt-0.5">|</span>
-                      <p className="text-[#a0a0a0] text-sm leading-relaxed">
-                        {beat}
-                      </p>
+            <TabsContent value="short_script" className="mt-4 outline-none">
+              <ContentPanel title={pack.short_script.title} action={<CopyButton format="short_script" />}>
+                <div className="space-y-3">
+                  {pack.short_script.beats.map((beat, index) => (
+                    <div key={index} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                      <span className="shrink-0 text-xs font-semibold text-[#F8C471]">{(index + 1) * 8}s</span>
+                      <p className="text-sm leading-6 text-[#A1A1AA]">{beat}</p>
                     </div>
                   ))}
                 </div>
-              </div>
+              </ContentPanel>
+            </TabsContent>
+
+            <TabsContent value="linkedin" className="mt-4 outline-none">
+              <ContentPanel title="LinkedIn native post" action={<CopyButton format="linkedin" />} accent>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-[#A1A1AA]">{getContentForFormat(pack, 'linkedin')}</p>
+              </ContentPanel>
             </TabsContent>
           </Tabs>
         </div>
 
-        {/* Bottom Action Bar */}
-        <div className="flex items-center justify-between gap-3 p-6 pt-4 border-t border-[#1a1a1a] mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onTogglePosted(pack.id)}
-            className={`h-9 px-4 text-sm font-medium border-[#222222] transition-colors ${
-              pack.posted
-                ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20 hover:text-green-300 border-green-500/25'
-                : 'bg-[#0a0a0a] text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white'
-            }`}
-          >
-            {pack.posted ? (
-              <>
-                <CheckCircle className="size-4" />
-                Mark Unposted
-              </>
-            ) : (
-              <>
-                <CheckCircle className="size-4" />
-                Mark Posted
-              </>
-            )}
+        <div className="flex items-center justify-between border-t border-white/10 px-6 py-4">
+          <Button variant="ghost" size="sm" onClick={() => onDelete(pack.id)} className="h-9 rounded-xl text-xs text-rose-300 hover:bg-rose-500/10 hover:text-rose-200">
+            <Trash2 className="mr-1 size-4" /> Delete
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDelete(pack.id)}
-            className="h-9 px-4 text-sm font-medium bg-[#0a0a0a] text-red-400 border-red-500/25 hover:bg-red-500/10 hover:text-red-300 transition-colors"
-          >
-            <Trash2 className="size-4" />
-            Delete
+          <Button variant="outline" size="sm" onClick={() => onTogglePosted(pack.id)} className="h-9 rounded-xl border-white/10 bg-white/[0.045] text-xs text-[#A1A1AA] hover:bg-white/[0.075] hover:text-[#F8FAFC]">
+            {pack.posted ? 'Mark Unposted' : 'Mark Posted'}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ContentPanel({ title, action, children, accent = false }: { title: string; action: ReactNode; children: ReactNode; accent?: boolean }) {
+  return (
+    <div className="max-h-[54vh] overflow-y-auto rounded-[22px] border border-white/10 bg-[#050508]/72 p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <h4 className={`text-lg font-semibold leading-7 ${accent ? 'premium-text-gradient' : 'text-[#F8FAFC]'}`}>{title}</h4>
+        {action}
+      </div>
+      {children}
+    </div>
   );
 }

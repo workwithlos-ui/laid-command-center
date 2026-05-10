@@ -1,0 +1,64 @@
+[
+  {
+    "id": "content-command-sample-sprint",
+    "tool_name": "AI Workflow Command Sprint",
+    "source_url": "https://example.com/ai-update",
+    "summary": "A sample generated pack showing how the six-agent pipeline turns an AI update into a complete multi-platform content sprint.",
+    "audience": "Founders, operators, and growth teams building practical AI workflows",
+    "theme": "Create content from the latest AI update",
+    "style": "workflow",
+    "created_at": "2026-05-09T12:00:00.000Z",
+    "posted": false,
+    "quality_score": 92,
+    "critic_score": 94,
+    "rating": null,
+    "agent_log": [
+      { "agent": "Strategist", "summary": "Selected a practical operator angle with a clear workflow promise.", "score": 94 },
+      { "agent": "Research / News Finder", "summary": "Converted the update into reader-facing implications.", "score": 91 },
+      { "agent": "Relevance Filter", "summary": "Rejected broad hype and preserved the specific implementation use case.", "score": 90 },
+      { "agent": "Long-Post Writer", "summary": "Drafted the core narrative and implementation path.", "score": 92 },
+      { "agent": "Repurposer", "summary": "Adapted the sprint into platform-native formats.", "score": 90 },
+      { "agent": "Editor Quality Gate", "summary": "Passed final clarity, specificity, voice, and CTA checks.", "score": 96 }
+    ],
+    "long_post": {
+      "title": "The AI update only matters if it changes the workflow",
+      "body_markdown": "**The mistake most teams make with AI news:** they share the announcement instead of translating it into a workflow.\n\nThe reader does not need another summary. They need to know what changed, why it matters, and what to try next.\n\nHere is the sprint structure we use:\n\n1. Identify the exact capability that changed.\n2. Name the old workflow it replaces.\n3. Show the new workflow in three practical steps.\n4. Add the risk or limitation so the post feels credible.\n5. End with a clear implementation CTA.\n\nThat is the difference between AI commentary and useful content.\n\nThe best content does not say, “this tool is powerful.” It says, “here is the task this now makes easier.”"
+    },
+    "x_thread": {
+      "hook": "Most AI updates are not content. They are raw material. The job is to turn the update into a workflow your audience can use.",
+      "tweets": [
+        "1/ The announcement is rarely the angle. The workflow change is the angle.",
+        "2/ Ask: what task becomes faster, cheaper, or more reliable because of this update?",
+        "3/ Then map the before and after. Before: manual research, blank-page writing, scattered notes. After: one prompt, one review pass, one publishable asset.",
+        "4/ Add the limitation. Good content gets more credible when it says what the tool still cannot do.",
+        "5/ Package the result into a post, thread, caption, carousel, script, and LinkedIn version. One insight. Six distribution surfaces."
+      ]
+    },
+    "ig_caption": {
+      "hook": "Stop posting AI announcements. Translate them.",
+      "body": "Your audience does not need another generic update.\n\nThey need to know what changed in their actual workflow.\n\nThe simple filter:\n\nWhat got faster?\nWhat got cheaper?\nWhat got easier to delegate?\nWhat still needs human review?\n\nAnswer those four questions and the update becomes useful content.",
+      "cta": "Save this as your AI-news content filter."
+    },
+    "carousel": {
+      "slides": [
+        { "title": "AI News Is Not the Content", "bullets": ["The update is raw material", "The workflow change is the angle"] },
+        { "title": "Question 1", "bullets": ["What changed?", "Be specific, not promotional"] },
+        { "title": "Question 2", "bullets": ["What workflow gets better?", "Name the before and after"] },
+        { "title": "Question 3", "bullets": ["What should the reader try?", "Give one clear implementation step"] },
+        { "title": "Question 4", "bullets": ["What is the limitation?", "Credibility beats hype"] },
+        { "title": "The Output", "bullets": ["One insight", "Six platform-native assets"] }
+      ]
+    },
+    "short_script": {
+      "title": "Turn AI Updates Into Workflow Content",
+      "beats": [
+        "HOOK: Most AI updates are not worth posting until you translate them.",
+        "PROBLEM: Everyone repeats the same announcement, so the content sounds identical.",
+        "SHIFT: Ask what workflow actually changed for the reader.",
+        "EXAMPLE: If research got faster, show the old research loop and the new one.",
+        "QUALITY: Add the limitation so the content feels credible.",
+        "CTA: Use one update to create a post, thread, caption, carousel, script, and LinkedIn version."
+      ]
+    }
+  }
+]

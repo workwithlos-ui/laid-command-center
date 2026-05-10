@@ -4,87 +4,157 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 43 50% 55%;
-    --primary-foreground: 0 0% 4%;
-    --secondary: 0 0% 10%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 0 0% 10%;
-    --accent-foreground: 0 0% 100%;
+    --background: 240 23% 3%;
+    --foreground: 210 40% 98%;
+    --card: 240 11% 7%;
+    --card-foreground: 210 40% 98%;
+    --popover: 240 11% 7%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 272 91% 65%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 187 92% 59%;
+    --secondary-foreground: 240 23% 3%;
+    --muted: 240 7% 12%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 272 91% 65%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 13%;
-    --input: 0 0% 13%;
-    --ring: 43 50% 55%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 7%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 43 50% 55%;
-    --sidebar-primary-foreground: 0 0% 4%;
-    --sidebar-accent: 0 0% 10%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 13%;
-    --sidebar-ring: 43 50% 55%;
+    --border: 0 0% 100% / 0.08;
+    --input: 0 0% 100% / 0.08;
+    --ring: 272 91% 65%;
+    --radius: 1.25rem;
+    --sidebar-background: 240 11% 7%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 272 91% 65%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 240 8% 14%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 0 0% 100% / 0.08;
+    --sidebar-ring: 272 91% 65%;
+  }
+
+  html {
+    background: #050508;
   }
 
   body {
-    @apply bg-[#0a0a0a] text-white antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    @apply text-[#F8FAFC] antialiased;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(168, 85, 247, 0.16), transparent 34rem),
+      radial-gradient(circle at 82% 8%, rgba(34, 211, 238, 0.12), transparent 30rem),
+      linear-gradient(180deg, #050508 0%, #07070b 46%, #050508 100%);
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+
+  ::selection {
+    background: rgba(168, 85, 247, 0.35);
+    color: #F8FAFC;
   }
 }
 
 @layer components {
-  .card-hover {
-    @apply transition-all duration-200 ease-out;
-  }
-  .card-hover:hover {
-    @apply -translate-y-0.5 border-[#8a7340];
+  .obsidian-shell {
+    background: #050508;
+    color: #F8FAFC;
   }
 
-  /* Markdown rendered content */
+  .obsidian-card {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.032));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(22px);
+  }
+
+  .obsidian-elevated {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(23, 23, 32, 0.92), rgba(16, 16, 20, 0.9));
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.32);
+  }
+
+  .obsidian-glow {
+    position: relative;
+  }
+
+  .obsidian-glow::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.7), rgba(34, 211, 238, 0.42));
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0.58;
+    pointer-events: none;
+  }
+
+  .premium-gradient {
+    background: linear-gradient(135deg, #A855F7 0%, #22D3EE 100%);
+  }
+
+  .premium-text-gradient {
+    background: linear-gradient(135deg, #F8FAFC 0%, #D8B4FE 44%, #67E8F9 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .metric-card {
+    @apply obsidian-card rounded-[22px] p-5 transition-all duration-300;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(168, 85, 247, 0.32);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.44), 0 0 38px rgba(168, 85, 247, 0.08);
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgba(168, 85, 247, 0.28);
+  }
+
   .content-body strong,
   .asset-description strong {
-    color: #ffffff;
-    font-weight: 600;
+    color: #F8FAFC;
+    font-weight: 650;
   }
   .content-body em,
   .asset-description em {
-    color: #c9a84c;
+    color: #F8C471;
   }
   .content-body code.inline-code,
   .asset-code code.inline-code {
-    background: #1a1a1a;
-    color: #c9a84c;
-    padding: 1px 5px;
-    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #67E8F9;
+    padding: 1px 6px;
+    border-radius: 8px;
     font-size: 11px;
     font-family: 'JetBrains Mono', monospace;
   }
   .content-body .code-block,
   .asset-code .code-block {
-    background: #0d0d0d;
-    border: 1px solid #222;
-    border-radius: 4px;
-    padding: 12px;
-    margin: 8px 0;
+    background: rgba(5, 5, 8, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px;
+    margin: 10px 0;
     overflow-x: auto;
   }
   .content-body .code-block code,
   .asset-code .code-block code {
-    color: #a0a0a0;
+    color: #A1A1AA;
     font-size: 11px;
-    line-height: 1.6;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -92,37 +162,43 @@
   .asset-code li.numbered,
   .content-body li.bullet,
   .asset-code li.bullet {
-    margin: 4px 0 4px 16px;
+    margin: 5px 0 5px 18px;
     padding-left: 4px;
   }
   .content-body li.numbered .num,
   .asset-code li.numbered .num {
-    color: #c9a84c;
-    font-weight: 600;
+    color: #22D3EE;
+    font-weight: 700;
   }
   .content-body .md-header,
   .asset-code .md-header {
-    color: #ffffff;
-    font-weight: 600;
+    color: #F8FAFC;
+    font-weight: 700;
     font-size: 13px;
-    margin: 12px 0 6px;
+    margin: 14px 0 7px;
   }
   .content-body .md-hr,
   .asset-code .md-hr {
     border: none;
-    border-top: 1px solid #222;
-    margin: 12px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 14px 0;
   }
 }
 
 @layer utilities {
   .text-gold {
-    color: #c9a84c;
+    color: #F8C471;
   }
   .border-gold {
-    border-color: #c9a84c;
+    border-color: #F8C471;
   }
   .bg-gold {
-    background-color: #c9a84c;
+    background-color: #F8C471;
+  }
+  .text-obsidian-secondary {
+    color: #A1A1AA;
+  }
+  .text-obsidian-muted {
+    color: #71717A;
   }
 }
