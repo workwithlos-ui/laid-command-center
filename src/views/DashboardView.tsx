@@ -1,800 +1,466 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Activity,
-  AlertCircle,
-  ArrowUpRight,
-  Brain,
-  Check,
-  CheckCircle2,
-  Clock,
-  Copy,
-  ExternalLink,
-  FileText,
-  GitBranch,
-  KeyRound,
-  Loader2,
-  PenLine,
-  Search,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  Wand2,
-  X,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { ArrowLeft, Copy, ExternalLink, Settings, X } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import type { CommandCenterSettings, ContentPack } from '@/data/types';
 
-type GenerationSource = 'llm' | 'github' | 'both';
-type AgentId = 'research' | 'writer' | 'editor' | 'repurposer';
-type RunState = 'idle' | 'running' | 'complete' | 'error';
-type DetailTab = 'long' | 'x' | 'ig' | 'carousel' | 'script';
+type Mode = 'generate' | 'repurpose' | 'library';
+type RunState = 'idle' | 'running' | 'done' | 'error';
+type DetailTab = 'long_post' | 'x_thread' | 'ig_caption' | 'carousel' | 'short_script' | 'linkedin_post';
+type FormatKey = DetailTab;
 
-type ActivityEntry = {
-  id: string;
-  agent: string;
-  message: string;
-  time: string;
+type FormatOption = {
+  key: FormatKey;
+  label: string;
 };
 
-type CandidatePreview = {
-  tool: string;
-  url: string;
-  summary: string;
-  selected?: boolean;
-};
-
-type AgentStatus = {
-  id: AgentId;
-  title: string;
-  icon: typeof Search;
-  state: 'queued' | 'active' | 'done';
-  status: string;
-  detail: string;
-  progress: number;
+type TabMeta = {
+  key: DetailTab;
+  label: string;
+  instruction: string;
 };
 
 const defaultSettings: CommandCenterSettings = {
   openaiApiKey: '',
   perplexityApiKey: '',
-  audience: '$500k-$10M founders/operators',
+  audience: '500k-10M founders/operators',
   defaultStyle: 'ai_news',
 };
 
-const styleOptions: Array<{ value: ContentPack['style']; title: string; description: string }> = [
-  { value: 'ai_news', title: 'AI News', description: 'Timely update, market signal, operator takeaways.' },
-  { value: 'workflow', title: 'Workflow', description: 'Step-by-step process content for busy teams.' },
-  { value: 'system', title: 'System', description: 'Strategic operating system and repeatable playbook.' },
+const styles: Array<{ value: ContentPack['style']; label: string }> = [
+  { value: 'ai_news', label: 'AI News' },
+  { value: 'workflow', label: 'Workflow' },
+  { value: 'system', label: 'System' },
 ];
 
-const sourceOptions: Array<{ value: GenerationSource; title: string; description: string }> = [
-  { value: 'llm', title: 'AI News', description: 'Recent product and model updates.' },
-  { value: 'github', title: 'GitHub Trending', description: 'Fast-moving AI repos and developer tools.' },
-  { value: 'both', title: 'Both', description: 'Merge both sources before scoring.' },
+const formatOptions: FormatOption[] = [
+  { key: 'long_post', label: 'Long Post' },
+  { key: 'x_thread', label: 'X Thread' },
+  { key: 'ig_caption', label: 'IG Caption' },
+  { key: 'carousel', label: 'Carousel' },
+  { key: 'short_script', label: 'Script' },
+  { key: 'linkedin_post', label: 'LinkedIn' },
 ];
 
-const tabMeta: Array<{ id: DetailTab; label: string; instruction: string }> = [
-  { id: 'long', label: 'Long Post', instruction: 'Publish this as the primary LinkedIn or newsletter post. Lead with the hook, then keep the numbered structure intact.' },
-  { id: 'x', label: 'X Thread', instruction: 'Use each paragraph as one post in the thread. Keep the first line as the opening hook.' },
-  { id: 'ig', label: 'IG Caption', instruction: 'Pair this caption with a simple carousel or talking-head clip. Keep the CTA as the final line.' },
-  { id: 'carousel', label: 'Carousel', instruction: 'Turn each slide into one visual frame. Use the bullets as layout notes for design.' },
-  { id: 'script', label: 'Script', instruction: 'Use this as a short-form video script. Read one beat per shot.' },
+const tabs: TabMeta[] = [
+  { key: 'long_post', label: 'Long Post', instruction: '500-1,500 word post for your blog or newsletter' },
+  { key: 'x_thread', label: 'X Thread', instruction: '6-10 tweet thread optimized for engagement' },
+  { key: 'ig_caption', label: 'IG Caption', instruction: 'Hook + body + CTA for Instagram' },
+  { key: 'carousel', label: 'Carousel', instruction: '6-8 slide outline with titles and bullets' },
+  { key: 'short_script', label: 'Script', instruction: '45-60 second short-form video script' },
+  { key: 'linkedin_post', label: 'LinkedIn', instruction: 'Professional post with engagement CTA' },
 ];
 
-const initialAgents: AgentStatus[] = [
-  { id: 'research', title: 'Research Agent', icon: Search, state: 'queued', status: 'Ready to scan AI sources', detail: 'Waiting for generation request.', progress: 0 },
-  { id: 'writer', title: 'Writer Agent', icon: PenLine, state: 'queued', status: 'Waiting for research', detail: 'Long-form post is queued.', progress: 0 },
-  { id: 'editor', title: 'Editor Agent', icon: ShieldCheck, state: 'queued', status: 'Waiting for draft', detail: 'Quality gates are queued.', progress: 0 },
-  { id: 'repurposer', title: 'Repurposer Agent', icon: GitBranch, state: 'queued', status: 'Waiting for approval', detail: 'Five output formats are queued.', progress: 0 },
-];
+const progressSteps = ['Finding AI update...', 'Writing post...', 'Creating formats...', 'Quality check...'];
+const repurposeSteps = ['Reading source...', 'Writing post...', 'Creating formats...', 'Quality check...'];
 
-const sampleCandidates: CandidatePreview[] = [
-  {
-    tool: 'AI product update',
-    url: 'https://openai.com/news',
-    summary: 'A recent AI product release with clear workflow impact for operators.',
-  },
-  {
-    tool: 'Developer workflow signal',
-    url: 'https://github.com/trending',
-    summary: 'A trending repo or builder tool that can save teams manual work.',
-  },
-  {
-    tool: 'Automation market move',
-    url: 'https://news.ycombinator.com',
-    summary: 'A practical AI adoption signal with a strong content angle.',
-  },
-];
-
-function normalizeContentPack(payload: unknown): ContentPack | null {
+function normalizePack(payload: unknown): ContentPack | null {
   if (!payload || typeof payload !== 'object') return null;
   const record = payload as Record<string, unknown>;
   return (record.contentPack || record) as ContentPack;
-}
-
-function getPackText(pack: ContentPack, tab: DetailTab) {
-  if (tab === 'long') return `${pack.long_post.title}\n\n${pack.long_post.body_markdown}`;
-  if (tab === 'x') return [pack.x_thread.hook, ...pack.x_thread.tweets].join('\n\n');
-  if (tab === 'ig') return `${pack.ig_caption.hook}\n\n${pack.ig_caption.body}\n\n${pack.ig_caption.cta}`;
-  if (tab === 'carousel') {
-    return pack.carousel.slides
-      .map((slide, index) => `${index + 1}. ${slide.title}\n${slide.bullets.map((bullet) => `• ${bullet}`).join('\n')}`)
-      .join('\n\n');
-  }
-  return `${pack.short_script.title}\n\n${pack.short_script.beats.map((beat) => `• ${beat}`).join('\n')}`;
-}
-
-function packHook(pack: ContentPack) {
-  const firstLine = String(pack.long_post.body_markdown || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line && !line.startsWith('#'));
-  return firstLine || pack.x_thread.hook || pack.summary;
 }
 
 function formatDate(value?: string) {
   if (!value) return 'Today';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 
-function wordCount(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).length;
+function styleLabel(style: ContentPack['style']) {
+  return styles.find((item) => item.value === style)?.label || 'AI News';
 }
 
-function createActivity(pack: ContentPack): ActivityEntry[] {
-  const count = wordCount(pack.long_post.body_markdown).toLocaleString();
-  return [
-    { id: `research-${pack.id}`, agent: 'Research Agent', message: `found ${pack.tool_name} update`, time: 'just now' },
-    { id: `writer-${pack.id}`, agent: 'Writer Agent', message: `generated ${count} word post`, time: 'just now' },
-    { id: `editor-${pack.id}`, agent: 'Editor Agent', message: 'passed 5 of 5 quality checks', time: 'just now' },
-    { id: `repurpose-${pack.id}`, agent: 'Repurposer Agent', message: 'created Long Post, X Thread, IG Caption, Carousel, and Script', time: 'just now' },
-  ];
+function packSummary(pack: ContentPack) {
+  return pack.summary || pack.long_post?.title || pack.x_thread?.hook || 'Content pack ready.';
 }
 
-function scoreLabel(value?: number) {
-  if (!value) return 'Ready';
-  if (value >= 85) return 'High signal';
-  if (value >= 70) return 'Strong';
-  return 'Useful';
+function getTabText(pack: ContentPack, tab: DetailTab) {
+  if (tab === 'long_post') return `${pack.long_post.title}\n\n${pack.long_post.body_markdown}`.trim();
+  if (tab === 'x_thread') return [pack.x_thread.hook, ...(pack.x_thread.tweets || [])].filter(Boolean).join('\n\n');
+  if (tab === 'ig_caption') return [pack.ig_caption.hook, pack.ig_caption.body, pack.ig_caption.cta].filter(Boolean).join('\n\n');
+  if (tab === 'carousel') {
+    return (pack.carousel.slides || [])
+      .map((slide, index) => `${index + 1}. ${slide.title}\n${(slide.bullets || []).map((bullet) => `• ${bullet}`).join('\n')}`)
+      .join('\n\n');
+  }
+  if (tab === 'short_script') return [pack.short_script.title, ...(pack.short_script.beats || [])].filter(Boolean).join('\n\n');
+  return [pack.linkedin_post?.hook, pack.linkedin_post?.body, pack.linkedin_post?.cta].filter(Boolean).join('\n\n');
 }
 
-function updateAgent(agents: AgentStatus[], id: AgentId, update: Partial<AgentStatus>) {
-  return agents.map((agent) => (agent.id === id ? { ...agent, ...update } : agent));
-}
-
-function StatCard({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+function MarkdownText({ value }: { value: string }) {
+  const blocks = value.split('\n');
   return (
-    <div className="soft-card rounded-3xl p-5 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <div className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
-      <p className="mt-2 text-sm leading-5 text-slate-500">{detail}</p>
+    <div className="content-text">
+      {blocks.map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={index} className="h-3" />;
+        if (trimmed.startsWith('# ')) return <h1 key={index}>{trimmed.replace(/^#\s+/, '')}</h1>;
+        if (trimmed.startsWith('## ')) return <h2 key={index}>{trimmed.replace(/^##\s+/, '')}</h2>;
+        if (trimmed.startsWith('### ')) return <h3 key={index}>{trimmed.replace(/^###\s+/, '')}</h3>;
+        if (/^[-•]\s+/.test(trimmed)) return <p key={index} className="content-bullet">{trimmed.replace(/^[-•]\s+/, '')}</p>;
+        if (/^\d+\.\s+/.test(trimmed)) return <p key={index} className="content-numbered">{trimmed}</p>;
+        return <p key={index}>{trimmed.replace(/\*\*/g, '')}</p>;
+      })}
     </div>
   );
 }
 
-function EmptyState({ onGenerate }: { onGenerate: () => void }) {
-  return (
-    <div className="soft-card rounded-[2rem] p-10 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-        <Sparkles className="h-6 w-6" />
+function ContentBlock({ pack, tab }: { pack: ContentPack; tab: DetailTab }) {
+  if (tab === 'carousel') {
+    return (
+      <div className="space-y-4">
+        {(pack.carousel.slides || []).map((slide, index) => (
+          <section key={`${slide.title}-${index}`} className="surface p-5">
+            <p className="text-xs text-muted">Slide {index + 1}</p>
+            <h3 className="mt-2 text-lg font-medium text-primary-text">{slide.title}</h3>
+            <div className="mt-3 space-y-2 text-sm leading-6 text-secondary-text">
+              {(slide.bullets || []).map((bullet) => (
+                <p key={bullet}>• {bullet}</p>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
-      <h3 className="mt-5 text-xl font-semibold text-slate-950">No content packs yet.</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-        Click Generate to create your first pack. The agents will find a real AI update, write the long post, repurpose it into five formats, and save it here.
-      </p>
-      <Button className="mt-6 h-11 rounded-full bg-indigo-600 px-5 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500" onClick={onGenerate}>
-        <Wand2 className="mr-2 h-4 w-4" /> Generate your first pack
-      </Button>
-    </div>
-  );
+    );
+  }
+
+  if (tab === 'short_script') {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-2xl font-medium text-primary-text">{pack.short_script.title}</h2>
+        {(pack.short_script.beats || []).map((beat, index) => (
+          <section key={`${beat}-${index}`} className="surface p-5">
+            <p className="text-xs text-muted">Beat {index + 1}</p>
+            <p className="mt-2 text-base leading-7 text-primary-text">{beat}</p>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return <MarkdownText value={getTabText(pack, tab)} />;
 }
 
-function AgentPipeline({ agents, candidates, selectedPack }: { agents: AgentStatus[]; candidates: CandidatePreview[]; selectedPack: ContentPack | null }) {
-  const checks = [
-    'Desire mapping',
-    'Word count',
-    'Banned words',
-    'Hook strength',
-    'Specificity',
-  ];
-  const formats = ['Long Post', 'X Thread', 'IG Caption', 'Carousel', 'Script'];
-
+function PackCard({ pack, onOpen }: { pack: ContentPack; onOpen: (pack: ContentPack) => void }) {
   return (
-    <div className="rounded-[1.75rem] border border-indigo-100 bg-white/90 p-5 shadow-2xl shadow-indigo-950/10">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">Agent pipeline</p>
-          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Watch the content team work</h3>
-        </div>
-        <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Live run</div>
-      </div>
-      <div className="mt-6 grid gap-4 xl:grid-cols-4">
-        {agents.map((agent, index) => {
-          const Icon = agent.icon;
-          const active = agent.state === 'active';
-          const done = agent.state === 'done';
-          return (
-            <div key={agent.id} className="relative">
-              {index > 0 && <div className="absolute -left-4 top-8 hidden h-px w-4 bg-slate-200 xl:block" />}
-              <div className={`h-full rounded-3xl border p-4 transition duration-300 ${active ? 'agent-pulse border-indigo-200 bg-indigo-50/80' : done ? 'border-emerald-200 bg-emerald-50/80' : 'border-slate-200 bg-slate-50/80 opacity-70'}`}>
-                <div className="flex items-center justify-between">
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400'}`}>
-                    {done ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                  </div>
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${done ? 'bg-emerald-100 text-emerald-700' : active ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-400'}`}>
-                    {done ? 'Done' : active ? 'Active' : 'Queued'}
-                  </span>
-                </div>
-                <h4 className="mt-4 text-sm font-semibold text-slate-950">{agent.title}</h4>
-                <p className="mt-1 min-h-10 text-sm leading-5 text-slate-600">{agent.status}</p>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
-                  <div className={`h-full rounded-full ${active ? 'progress-stripes bg-indigo-600' : done ? 'bg-emerald-500' : 'bg-slate-200'}`} style={{ width: `${agent.progress}%` }} />
-                </div>
-                <p className="mt-3 text-xs leading-5 text-slate-500">{agent.detail}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Search className="h-4 w-4 text-indigo-500" /> Research candidates
-          </div>
-          <div className="mt-3 space-y-2">
-            {candidates.map((candidate, index) => (
-              <div key={`${candidate.tool}-${index}`} className={`rounded-2xl border p-3 ${candidate.selected ? 'border-indigo-200 bg-white shadow-sm' : 'border-slate-200 bg-white/70'}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">{candidate.tool}</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{candidate.summary}</p>
-                  </div>
-                  {candidate.selected && <span className="rounded-full bg-indigo-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Selected</span>}
-                </div>
-                <p className="mt-2 truncate text-[11px] text-slate-400">{candidate.url}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-3xl bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <ShieldCheck className="h-4 w-4 text-emerald-500" /> Quality and formats
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div className="rounded-2xl bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Quality gates</p>
-              <div className="mt-2 space-y-2">
-                {checks.map((check, index) => (
-                  <div key={check} className="flex items-center gap-2 text-sm text-slate-600">
-                    <CheckCircle2 className={`h-4 w-4 ${agents[2].progress >= (index + 1) * 18 ? 'text-emerald-500' : 'text-slate-300'}`} /> {check}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Formats</p>
-              <div className="mt-2 space-y-2">
-                {formats.map((format, index) => (
-                  <div key={format} className="flex items-center gap-2 text-sm text-slate-600">
-                    <CheckCircle2 className={`h-4 w-4 ${agents[3].progress >= (index + 1) * 18 || selectedPack ? 'text-emerald-500' : 'text-slate-300'}`} /> {format}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContentPackCard({ pack, onOpen, isNew }: { pack: ContentPack; onOpen: () => void; isNew: boolean }) {
-  return (
-    <button onClick={onOpen} className={`group soft-card w-full rounded-[1.6rem] p-5 text-left transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-950/10 ${isNew ? 'pack-enter' : ''}`}>
+    <button type="button" className="pack-card text-left" onClick={() => onOpen(pack)}>
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition group-hover:bg-indigo-600 group-hover:text-white">
-            <FileText className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-slate-950">{pack.tool_name}</p>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{pack.style}</span>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">{scoreLabel(pack.impact_score)}</span>
-            </div>
-            <h3 className="mt-3 line-clamp-2 text-xl font-semibold tracking-tight text-slate-950">{pack.long_post.title}</h3>
-            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{packHook(pack)}</p>
+        <div className="min-w-0">
+          <h3 className="truncate text-xl font-medium text-primary-text">{pack.tool_name}</h3>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+            <span>{formatDate(pack.source_date || pack.created_at)}</span>
+            <span className="tag">{styleLabel(pack.style)}</span>
+            {typeof pack.critic_score === 'number' ? <span className="tag">{pack.critic_score}%</span> : null}
           </div>
         </div>
-        <div className="hidden shrink-0 text-right sm:block">
-          <p className="text-xs font-medium text-slate-400">{formatDate(pack.created_at || pack.source_date)}</p>
-          <ArrowUpRight className="ml-auto mt-5 h-5 w-5 text-slate-300 transition group-hover:text-indigo-600" />
-        </div>
+        <span className="view-link">View Pack →</span>
       </div>
+      <p className="mt-4 line-clamp-2 text-sm leading-6 text-secondary-text">{packSummary(pack)}</p>
     </button>
   );
 }
 
-function DetailPanel({ pack, onClose }: { pack: ContentPack | null; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<DetailTab>('long');
-  const [copiedTab, setCopiedTab] = useState<DetailTab | null>(null);
-
-  useEffect(() => {
-    setActiveTab('long');
-    setCopiedTab(null);
-  }, [pack?.id]);
-
-  if (!pack) return null;
-  const activeMeta = tabMeta.find((item) => item.id === activeTab) || tabMeta[0];
-  const text = getPackText(pack, activeTab);
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopiedTab(activeTab);
-    setTimeout(() => setCopiedTab(null), 1400);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/35 p-3 backdrop-blur-sm sm:p-6">
-      <div className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-slate-950/30">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">
-              <span>{pack.tool_name}</span>
-              <span className="text-slate-300">/</span>
-              <span>{formatDate(pack.source_date)}</span>
-            </div>
-            <h2 className="mt-2 max-w-4xl text-2xl font-semibold tracking-tight text-slate-950 lg:text-3xl">{pack.long_post.title}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{pack.summary}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {pack.source_url && (
-              <a href={pack.source_url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-full border border-slate-200 px-4 text-sm font-medium text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600">
-                Source <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
-            )}
-            <Button variant="outline" className="h-10 rounded-full border-slate-200 bg-white px-4 text-slate-600 hover:bg-slate-50" onClick={onClose}>
-              <X className="mr-2 h-4 w-4" /> Close
-            </Button>
-          </div>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <div className="border-b border-slate-200 bg-slate-50/80 p-4 lg:w-64 lg:border-b-0 lg:border-r">
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-              {tabMeta.map((tab) => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-600 hover:bg-white hover:text-slate-950'}`}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto p-5 lg:p-8">
-            <div className="mb-5 flex flex-col gap-3 rounded-3xl bg-indigo-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-indigo-900">{activeMeta.label}</p>
-                <p className="mt-1 text-sm leading-6 text-indigo-700">{activeMeta.instruction}</p>
-              </div>
-              <Button className="h-10 rounded-full bg-indigo-600 px-5 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500" onClick={copy}>
-                {copiedTab === activeTab ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                {copiedTab === activeTab ? 'Copied' : 'Copy'}
-              </Button>
-            </div>
-            <pre className="whitespace-pre-wrap rounded-[1.5rem] border border-slate-200 bg-white p-6 font-sans text-[15px] leading-8 text-slate-700 shadow-sm">{text}</pre>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SettingsPanel({ open, settings, onSave, onClose }: { open: boolean; settings: CommandCenterSettings; onSave: (settings: CommandCenterSettings) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState(settings);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setDraft(settings);
-      setSaved(false);
-    }
-  }, [open, settings]);
-
-  if (!open) return null;
-
-  const save = () => {
-    onSave({ ...defaultSettings, ...draft });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1600);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm">
-      <div className="ml-auto flex h-full w-full max-w-xl flex-col bg-white shadow-2xl shadow-slate-950/25">
-        <div className="flex items-start justify-between border-b border-slate-200 p-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">Settings</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Generation controls</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Store the OpenAI API key in localStorage, set the audience, and choose the default writing style.</p>
-          </div>
-          <button onClick={onClose} className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="flex-1 space-y-5 overflow-auto p-6">
-          <div>
-            <label className="text-sm font-semibold text-slate-800">OpenAI API key</label>
-            <Input type="password" value={draft.openaiApiKey || ''} onChange={(event) => setDraft((prev) => ({ ...prev, openaiApiKey: event.target.value }))} className="mt-2 h-12 rounded-2xl border-slate-200 bg-slate-50 text-slate-950" placeholder="sk-proj..." />
-            <p className="mt-2 text-xs leading-5 text-slate-500">Required for generation. It is sent to the API only when you create a pack.</p>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-800">Audience</label>
-            <Textarea value={draft.audience || ''} onChange={(event) => setDraft((prev) => ({ ...prev, audience: event.target.value }))} className="mt-2 min-h-24 rounded-2xl border-slate-200 bg-slate-50 text-slate-950" />
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-800">Default style</label>
-            <div className="mt-2 grid gap-2">
-              {styleOptions.map((option) => (
-                <button key={option.value} onClick={() => setDraft((prev) => ({ ...prev, defaultStyle: option.value }))} className={`rounded-2xl border p-4 text-left transition ${draft.defaultStyle === option.value ? 'border-indigo-200 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'}`}>
-                  <span className="text-sm font-semibold">{option.title}</span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-500">{option.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="border-t border-slate-200 p-6">
-          {saved && <div className="mb-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">Settings saved.</div>}
-          <Button className="h-12 w-full rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500" onClick={save}>
-            <Check className="mr-2 h-4 w-4" /> Save settings
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function DashboardView() {
-  const [contentPacks, setContentPacks] = useLocalStorage<ContentPack[]>('laid-content-packs', []);
-  const [settings, setSettings] = useLocalStorage<CommandCenterSettings>('laid-settings', defaultSettings);
-  const [activity, setActivity] = useLocalStorage<ActivityEntry[]>('laid-agent-activity', []);
-  const [generateOpen, setGenerateOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [theme, setTheme] = useState('AI tools for 500k-10M founders');
+  const [settings, setSettings] = useLocalStorage<CommandCenterSettings>('laid-command-center-settings', defaultSettings);
+  const [localPacks, setLocalPacks] = useLocalStorage<ContentPack[]>('laid-content-packs-cache', []);
+  const [mode, setMode] = useState<Mode>('generate');
+  const [theme, setTheme] = useState('');
   const [style, setStyle] = useState<ContentPack['style']>(settings.defaultStyle || 'ai_news');
-  const [source, setSource] = useState<GenerationSource>('both');
-  const [agents, setAgents] = useState<AgentStatus[]>(initialAgents);
-  const [candidates, setCandidates] = useState<CandidatePreview[]>(sampleCandidates);
-  const [runState, setRunState] = useState<RunState>('idle');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [sourceContent, setSourceContent] = useState('');
+  const [formats, setFormats] = useState<FormatKey[]>(formatOptions.map((format) => format.key));
+  const [packs, setPacks] = useState<ContentPack[]>(localPacks);
   const [selectedPack, setSelectedPack] = useState<ContentPack | null>(null);
-  const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+  const [selectedTab, setSelectedTab] = useState<DetailTab>('long_post');
+  const [runState, setRunState] = useState<RunState>('idle');
+  const [progressText, setProgressText] = useState('');
+  const [error, setError] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [styleFilter, setStyleFilter] = useState<'all' | ContentPack['style']>('all');
+  const [sort, setSort] = useState<'date' | 'score'>('date');
 
   useEffect(() => {
-    setStyle(settings.defaultStyle || 'ai_news');
-  }, [settings.defaultStyle]);
-
-  useEffect(() => {
-    let active = true;
+    let ignore = false;
     async function loadPacks() {
       try {
         const response = await fetch('/api/contentPacks');
-        if (!response.ok) throw new Error('Unable to load saved content packs.');
-        const packs = await response.json();
-        if (active && Array.isArray(packs)) setContentPacks(packs);
-      } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : 'Unable to load saved content packs.');
-      } finally {
-        if (active) setIsLoading(false);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!ignore && Array.isArray(data)) {
+          setPacks(data);
+          setLocalPacks(data);
+        }
+      } catch {
+        if (!ignore) setPacks(localPacks);
       }
     }
     loadPacks();
     return () => {
-      active = false;
+      ignore = true;
     };
-  }, [setContentPacks]);
+  }, []);
 
-  const stats = useMemo(() => {
-    const updates = new Set(contentPacks.map((pack) => pack.tool_name)).size;
-    return {
-      packs: contentPacks.length,
-      updates,
-      formats: contentPacks.length * 5,
-      latest: contentPacks[0],
-    };
-  }, [contentPacks]);
+  useEffect(() => {
+    setLocalPacks(packs);
+  }, [packs, setLocalPacks]);
 
-  const runTimeline = async () => {
-    setAgents(initialAgents);
-    setCandidates(sampleCandidates);
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    setAgents((prev) => updateAgent(prev, 'research', { state: 'active', status: 'Scanning AI news sources...', detail: 'Checking product updates, release notes, and trending repositories.', progress: 28 }));
-    await new Promise((resolve) => setTimeout(resolve, 850));
-    setAgents((prev) => updateAgent(prev, 'research', { state: 'active', status: 'Found 3 candidates', detail: 'Scoring candidates for freshness, operator impact, and story potential.', progress: 72 }));
-    setCandidates((prev) => prev.map((candidate, index) => ({ ...candidate, selected: index === 0 })));
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setAgents((prev) => updateAgent(updateAgent(prev, 'research', { state: 'done', status: 'Selected strongest update', detail: 'Candidate passed impact and relevance scoring.', progress: 100 }), 'writer', { state: 'active', status: 'Writing long-form post...', detail: `${style} style for ${settings.audience || defaultSettings.audience}.`, progress: 34 }));
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    setAgents((prev) => updateAgent(prev, 'writer', { state: 'active', status: 'Drafting hook and opening section', detail: 'Building the argument and operator takeaways.', progress: 68 }));
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    setAgents((prev) => updateAgent(updateAgent(prev, 'writer', { state: 'done', status: 'Long-form post drafted', detail: 'Full post ready for editorial checks.', progress: 100 }), 'editor', { state: 'active', status: 'Running quality checks...', detail: 'Checking desire mapping, specificity, banned words, hook strength, and structure.', progress: 22 }));
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setAgents((prev) => updateAgent(prev, 'editor', { state: 'active', status: 'Passed 5 of 5 checks', detail: 'Content is specific, clear, and ready to repurpose.', progress: 100 }));
-    await new Promise((resolve) => setTimeout(resolve, 550));
-    setAgents((prev) => updateAgent(updateAgent(prev, 'editor', { state: 'done', status: 'Passed 5 of 5 checks', detail: 'Quality gate complete.', progress: 100 }), 'repurposer', { state: 'active', status: 'Generating 5 formats...', detail: 'Creating X Thread, IG Caption, Carousel, Script, and Long Post package.', progress: 28 }));
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setAgents((prev) => updateAgent(prev, 'repurposer', { state: 'active', status: 'X Thread and IG Caption done', detail: 'Social formats are being finalized.', progress: 64 }));
-    await new Promise((resolve) => setTimeout(resolve, 750));
-    setAgents((prev) => updateAgent(prev, 'repurposer', { state: 'done', status: 'All 5 formats complete', detail: 'Pack is ready to save to the library.', progress: 100 }));
-  };
+  useEffect(() => {
+    if (runState !== 'running') return;
+    const steps = mode === 'repurpose' ? repurposeSteps : progressSteps;
+    let index = 0;
+    setProgressText(steps[0]);
+    const interval = window.setInterval(() => {
+      index = Math.min(index + 1, steps.length - 1);
+      setProgressText(steps[index]);
+    }, 2200);
+    return () => window.clearInterval(interval);
+  }, [runState, mode]);
 
-  const generatePack = async () => {
-    setError('');
-    if (!settings.openaiApiKey) {
-      setError('Add your OpenAI API key in Settings before generating a content pack.');
-      setSettingsOpen(true);
-      return;
-    }
-
-    setRunState('running');
-    const timeline = runTimeline();
-    try {
-      const response = await fetch('/api/generateContentPack', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-openai-api-key': settings.openaiApiKey,
-        },
-        body: JSON.stringify({
-          apiKey: settings.openaiApiKey,
-          theme,
-          style,
-          source,
-          audience: settings.audience || defaultSettings.audience,
-        }),
+  const filteredPacks = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return [...packs]
+      .filter((pack) => {
+        const matchesQuery = !query || [pack.tool_name, pack.summary, pack.theme, pack.long_post?.title].filter(Boolean).join(' ').toLowerCase().includes(query);
+        const matchesStyle = styleFilter === 'all' || pack.style === styleFilter;
+        return matchesQuery && matchesStyle;
+      })
+      .sort((a, b) => {
+        if (sort === 'score') return (b.critic_score || 0) - (a.critic_score || 0);
+        return new Date(b.created_at || b.source_date || 0).getTime() - new Date(a.created_at || a.source_date || 0).getTime();
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Generation failed.');
-      const contentPack = normalizeContentPack(payload);
-      if (!contentPack?.id) throw new Error('Generation returned an invalid content pack.');
-      await timeline;
-      setCandidates((prev) => [
-        { tool: contentPack.tool_name, url: contentPack.source_url, summary: contentPack.summary, selected: true },
-        ...prev.slice(0, 2).map((candidate) => ({ ...candidate, selected: false })),
-      ]);
-      setContentPacks((prev) => [contentPack, ...prev.filter((item) => item.id !== contentPack.id)]);
-      setActivity((prev) => [...createActivity(contentPack), ...prev].slice(0, 12));
-      setLastCreatedId(contentPack.id);
-      setSelectedPack(contentPack);
-      setRunState('complete');
-      setTimeout(() => {
-        setGenerateOpen(false);
-        setRunState('idle');
-      }, 850);
-    } catch (err) {
+  }, [packs, search, styleFilter, sort]);
+
+  function savePack(pack: ContentPack) {
+    setPacks((current) => [pack, ...current.filter((item) => item.id !== pack.id)]);
+  }
+
+  async function requestPack(path: string, body: Record<string, unknown>) {
+    setRunState('running');
+    setError('');
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || 'Request failed.');
+    const pack = normalizePack(payload);
+    if (!pack) throw new Error('The server returned an invalid content pack.');
+    savePack(pack);
+    setSelectedPack(null);
+    setProgressText('Done');
+    setRunState('done');
+    return pack;
+  }
+
+  async function handleGenerate() {
+    const cleanTheme = theme.trim() || 'AI tools for founders';
+    try {
+      await requestPack('/api/generateContentPack', {
+        theme: cleanTheme,
+        style,
+        audience: settings.audience,
+        apiKey: settings.openaiApiKey,
+        source: 'both',
+      });
+    } catch (requestError) {
       setRunState('error');
-      setError(err instanceof Error ? err.message : 'Generation failed.');
-      setAgents((prev) => prev.map((agent) => (agent.state === 'active' ? { ...agent, state: 'queued', status: 'Stopped by error', detail: 'Review the message and try again.' } : agent)));
+      setError(requestError instanceof Error ? requestError.message : 'Generation failed.');
     }
-  };
+  }
 
-  return (
-    <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <header className="glass-panel sticky top-4 z-30 rounded-full px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white shadow-lg shadow-slate-950/20">
-                <Brain className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-950">LAID Content OS</p>
-                <p className="hidden text-xs text-slate-500 sm:block">Dashboard, agents, and library in one command center.</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" className="h-10 rounded-full border-slate-200 bg-white px-4 text-slate-700 hover:bg-slate-50" onClick={() => setSettingsOpen(true)}>
-                <Settings className="mr-2 h-4 w-4" /> Settings
-              </Button>
-              <Button className="h-10 rounded-full bg-indigo-600 px-4 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500" onClick={() => setGenerateOpen(true)}>
-                <Wand2 className="mr-2 h-4 w-4" /> Generate
-              </Button>
-            </div>
-          </div>
-        </header>
+  async function handleRepurpose() {
+    try {
+      await requestPack('/api/repurposeContent', {
+        content: sourceContent,
+        formats,
+        style,
+        audience: settings.audience,
+        theme: theme.trim() || 'Repurposed operator content',
+        apiKey: settings.openaiApiKey,
+      });
+    } catch (requestError) {
+      setRunState('error');
+      setError(requestError instanceof Error ? requestError.message : 'Repurpose failed.');
+    }
+  }
 
-        <section className="premium-gradient overflow-hidden rounded-[2.5rem] p-6 shadow-2xl shadow-indigo-950/10 sm:p-8 lg:p-10">
-          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-indigo-600 shadow-sm">
-                <Sparkles className="h-3.5 w-3.5" /> AI Content Command Center
-              </div>
-              <h1 className="mt-6 max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-slate-950 text-balance sm:text-5xl lg:text-6xl">
-                Turn real AI updates into publish-ready content packs.
-              </h1>
-              <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                Pick a theme, watch four visible agents research and create, then open the finished pack with Long Post, X Thread, IG Caption, Carousel, and Script tabs.
-              </p>
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Button className="h-12 rounded-full bg-indigo-600 px-6 text-base font-semibold text-white shadow-xl shadow-indigo-600/25 hover:bg-indigo-500" onClick={() => setGenerateOpen(true)}>
-                  <Wand2 className="mr-2 h-5 w-5" /> Generate from AI Update
-                </Button>
-                <Button variant="outline" className="h-12 rounded-full border-slate-200 bg-white px-6 text-base font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setSettingsOpen(true)}>
-                  <KeyRound className="mr-2 h-5 w-5" /> Configure API key
-                </Button>
-              </div>
-              {!settings.openaiApiKey && (
-                <div className="mt-5 flex max-w-2xl items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm leading-6 text-indigo-800">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> Add an OpenAI API key in Settings before your first generation run.
-                </div>
-              )}
-            </div>
-            <div className="rounded-[2rem] bg-slate-950 p-5 text-white shadow-2xl shadow-slate-950/20">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-300">Agent status</p>
-                <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">Ready</span>
-              </div>
-              <div className="mt-5 space-y-3">
-                {initialAgents.map((agent) => {
-                  const Icon = agent.icon;
-                  return (
-                    <div key={agent.id} className="flex items-center gap-3 rounded-2xl bg-white/8 p-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-indigo-200">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">{agent.title}</p>
-                        <p className="text-xs text-slate-400">Standing by for the next run.</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
+  function openPack(pack: ContentPack) {
+    setSelectedPack(pack);
+    setSelectedTab('long_post');
+  }
 
-        {error && (
-          <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-700 shadow-sm">
-            {error}
-          </div>
-        )}
+  async function copyCurrentTab() {
+    if (!selectedPack) return;
+    await navigator.clipboard.writeText(getTabText(selectedPack, selectedTab));
+  }
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatCard label="Content Packs" value={stats.packs} detail="Saved in the library and ready to publish." />
-          <StatCard label="AI Updates Covered" value={stats.updates} detail="Unique updates transformed into campaigns." />
-          <StatCard label="Formats Generated" value={stats.formats} detail="Five formats created for every pack." />
-        </section>
+  function toggleFormat(key: FormatKey) {
+    setFormats((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+  }
 
-        <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
-          <div className="space-y-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Content packs</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">Click any card to open the full detail view and copy each format.</p>
-              </div>
-              <Button variant="outline" className="h-10 rounded-full border-slate-200 bg-white px-4 text-slate-700 hover:bg-slate-50" onClick={() => setGenerateOpen(true)}>
-                <Wand2 className="mr-2 h-4 w-4" /> New pack
-              </Button>
-            </div>
-            {isLoading ? (
-              <div className="soft-card rounded-[2rem] p-8 text-sm text-slate-500">
-                <Loader2 className="mb-3 h-5 w-5 animate-spin text-indigo-600" /> Loading saved content packs.
-              </div>
-            ) : contentPacks.length === 0 ? (
-              <EmptyState onGenerate={() => setGenerateOpen(true)} />
-            ) : (
-              <div className="grid gap-4">
-                {contentPacks.map((pack) => (
-                  <ContentPackCard key={pack.id} pack={pack} onOpen={() => setSelectedPack(pack)} isNew={pack.id === lastCreatedId} />
-                ))}
-              </div>
-            )}
+  if (selectedPack) {
+    const activeTab = tabs.find((tab) => tab.key === selectedTab) || tabs[0];
+    return (
+      <main className="min-h-screen bg-app text-primary-text">
+        <section className="mx-auto max-w-4xl px-6 py-8">
+          <button type="button" className="icon-link" onClick={() => setSelectedPack(null)}>
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+
+          <div className="mt-12">
+            <h1 className="text-4xl font-medium tracking-tight text-primary-text">{selectedPack.tool_name}</h1>
+            <a className="mt-3 inline-flex items-center gap-2 text-sm text-muted transition hover:text-primary-text" href={selectedPack.source_url} target="_blank" rel="noreferrer">
+              {selectedPack.source_url} <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
 
-          <aside className="space-y-5">
-            <div className="soft-card rounded-[2rem] p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-950">Agent Activity</h3>
-                  <p className="mt-1 text-sm text-slate-500">Recent actions from the content team.</p>
-                </div>
-                <Activity className="h-5 w-5 text-indigo-500" />
-              </div>
-              <div className="mt-5 space-y-4">
-                {(activity.length ? activity : [
-                  { id: 'empty-1', agent: 'Research Agent', message: 'waiting for the first AI update scan', time: 'ready' },
-                  { id: 'empty-2', agent: 'Writer Agent', message: 'ready to generate the first long post', time: 'ready' },
-                  { id: 'empty-3', agent: 'Repurposer Agent', message: 'ready to create five formats', time: 'ready' },
-                ]).slice(0, 6).map((item) => (
-                  <div key={item.id} className="flex gap-3">
-                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/40" />
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{item.agent} <span className="font-normal text-slate-500">{item.message}</span></p>
-                      <p className="mt-1 flex items-center gap-1 text-xs text-slate-400"><Clock className="h-3 w-3" /> {item.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <nav className="mt-10 flex gap-2 overflow-x-auto border-b border-line pb-3">
+            {tabs.map((tab) => (
+              <button key={tab.key} type="button" className={`tab-button ${selectedTab === tab.key ? 'active' : ''}`} onClick={() => setSelectedTab(tab.key)}>
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-            <div className="soft-card rounded-[2rem] p-5">
-              <h3 className="text-lg font-semibold text-slate-950">How to use it</h3>
-              <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                <li className="flex gap-3"><span className="font-semibold text-indigo-600">1.</span> Add your OpenAI API key in Settings.</li>
-                <li className="flex gap-3"><span className="font-semibold text-indigo-600">2.</span> Click Generate from AI Update.</li>
-                <li className="flex gap-3"><span className="font-semibold text-indigo-600">3.</span> Watch the agents research, write, edit, and repurpose.</li>
-                <li className="flex gap-3"><span className="font-semibold text-indigo-600">4.</span> Open a pack and copy the format you need.</li>
-              </ol>
-            </div>
-          </aside>
-        </section>
-      </div>
-
-      {generateOpen && (
-        <div className="fixed inset-0 z-40 overflow-auto bg-slate-950/35 p-3 backdrop-blur-sm sm:p-6">
-          <div className="mx-auto my-4 max-w-6xl rounded-[2rem] bg-white p-5 shadow-2xl shadow-slate-950/25 sm:p-6">
-            <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-500">Generate from AI Update</p>
-                <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Brief the agents</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Set the theme, style, and source. When you start, the pipeline shows each agent working in real time.</p>
-              </div>
-              <button onClick={() => runState === 'running' ? undefined : setGenerateOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
-                <X className="h-5 w-5" />
+          <section className="mt-8">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <p className="text-sm text-muted">{activeTab.instruction}</p>
+              <button type="button" className="secondary-button" onClick={copyCurrentTab}>
+                <Copy className="h-4 w-4" /> Copy
               </button>
             </div>
-
-            <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
-              <div className="space-y-5">
-                <div>
-                  <label className="text-sm font-semibold text-slate-800">Theme</label>
-                  <Input value={theme} onChange={(event) => setTheme(event.target.value)} className="mt-2 h-12 rounded-2xl border-slate-200 bg-slate-50 text-slate-950" placeholder="Example: AI agents for local service businesses" disabled={runState === 'running'} />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-800">Style</label>
-                  <div className="mt-2 grid gap-2">
-                    {styleOptions.map((option) => (
-                      <button key={option.value} onClick={() => setStyle(option.value)} disabled={runState === 'running'} className={`rounded-2xl border p-4 text-left transition ${style === option.value ? 'border-indigo-200 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'}`}>
-                        <span className="text-sm font-semibold">{option.title}</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-500">{option.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-800">Source</label>
-                  <div className="mt-2 grid gap-2">
-                    {sourceOptions.map((option) => (
-                      <button key={option.value} onClick={() => setSource(option.value)} disabled={runState === 'running'} className={`rounded-2xl border p-4 text-left transition ${source === option.value ? 'border-indigo-200 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'}`}>
-                        <span className="text-sm font-semibold">{option.title}</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-500">{option.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {!settings.openaiApiKey && (
-                  <button onClick={() => setSettingsOpen(true)} className="flex w-full items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-left text-sm leading-6 text-indigo-800">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> Add your OpenAI API key in Settings before starting.
-                  </button>
-                )}
-                <Button className="h-12 w-full rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500" onClick={generatePack} disabled={runState === 'running'}>
-                  {runState === 'running' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  {runState === 'running' ? 'Agents working...' : 'Start agent pipeline'}
-                </Button>
-              </div>
-
-              <AgentPipeline agents={agents} candidates={candidates} selectedPack={runState === 'complete' ? stats.latest || null : null} />
+            <div className="detail-surface p-6 sm:p-8">
+              <ContentBlock pack={selectedPack} tab={selectedTab} />
             </div>
-          </div>
-        </div>
-      )}
+          </section>
+        </section>
+      </main>
+    );
+  }
 
-      <SettingsPanel open={settingsOpen} settings={settings} onSave={setSettings} onClose={() => setSettingsOpen(false)} />
-      <DetailPanel pack={selectedPack} onClose={() => setSelectedPack(null)} />
-    </div>
+  return (
+    <main className="min-h-screen bg-app text-primary-text">
+      <header className="mx-auto flex h-20 max-w-6xl items-center justify-between px-6">
+        <button type="button" className="text-base font-medium tracking-tight text-primary-text" onClick={() => setMode('generate')}>Content OS</button>
+        <nav className="mode-switch">
+          {(['generate', 'repurpose', 'library'] as Mode[]).map((item) => (
+            <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => { setMode(item); setRunState('idle'); setError(''); }}>
+              {item[0].toUpperCase() + item.slice(1)}
+            </button>
+          ))}
+        </nav>
+        <button type="button" className="icon-button" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
+          <Settings className="h-5 w-5" />
+        </button>
+      </header>
+
+      {mode === 'generate' ? (
+        <section className={`mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl flex-col items-center justify-center px-6 pb-20 text-center ${packs.length ? 'justify-start pt-20' : ''}`}>
+          <div className={`w-full transition duration-150 ${runState === 'running' ? 'opacity-45' : 'opacity-100'}`}>
+            <p className="text-sm text-muted">Generate a full content pack from a real AI update</p>
+            <input className="main-input mt-6" value={theme} onChange={(event) => setTheme(event.target.value)} placeholder="e.g. AI tools for founders" />
+            <div className="mt-4 flex justify-center gap-2">
+              {styles.map((item) => (
+                <button key={item.value} type="button" className={`choice-pill ${style === item.value ? 'active' : ''}`} onClick={() => setStyle(item.value)}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="primary-button mt-6 w-full" disabled={runState === 'running'} onClick={handleGenerate}>Generate</button>
+            <p className="mx-auto mt-4 max-w-lg text-xs leading-5 text-muted">Finds a real AI update, writes a long post, creates X thread, IG caption, carousel, script, and LinkedIn post</p>
+          </div>
+
+          {runState === 'running' || runState === 'done' ? <p className={`mt-6 text-sm text-muted ${runState === 'running' ? 'pulse-text' : ''}`}>{progressText}</p> : null}
+          {error ? <p className="mt-6 text-sm text-red-400">{error}</p> : null}
+
+          {packs[0] && runState === 'done' ? (
+            <div className="mt-12 w-full">
+              <PackCard pack={packs[0]} onOpen={openPack} />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {mode === 'repurpose' ? (
+        <section className={`mx-auto flex min-h-[calc(100vh-5rem)] max-w-2xl flex-col items-center justify-center px-6 pb-20 text-center ${packs.length ? 'justify-start pt-16' : ''}`}>
+          <div className={`w-full transition duration-150 ${runState === 'running' ? 'opacity-45' : 'opacity-100'}`}>
+            <p className="text-sm text-muted">Paste any content and get it in every format</p>
+            <textarea className="main-textarea mt-6" value={sourceContent} onChange={(event) => setSourceContent(event.target.value)} placeholder="Paste a blog post, transcript, tweet, or any content..." />
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              {formatOptions.map((item) => (
+                <label key={item.key} className="check-pill">
+                  <input type="checkbox" checked={formats.includes(item.key)} onChange={() => toggleFormat(item.key)} />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+            </div>
+            <button type="button" className="primary-button mt-6 w-full" disabled={runState === 'running'} onClick={handleRepurpose}>Repurpose</button>
+            <p className="mx-auto mt-4 max-w-lg text-xs leading-5 text-muted">Your content gets rewritten for each platform using your voice and style rules</p>
+          </div>
+
+          {runState === 'running' || runState === 'done' ? <p className={`mt-6 text-sm text-muted ${runState === 'running' ? 'pulse-text' : ''}`}>{progressText}</p> : null}
+          {error ? <p className="mt-6 text-sm text-red-400">{error}</p> : null}
+
+          {packs[0] && runState === 'done' ? (
+            <div className="mt-12 w-full">
+              <PackCard pack={packs[0]} onOpen={openPack} />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {mode === 'library' ? (
+        <section className="mx-auto max-w-3xl px-6 py-16">
+          <p className="text-center text-sm text-muted">All your content packs</p>
+          <input className="main-input mt-6" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search packs..." />
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            {(['all', 'ai_news', 'workflow', 'system'] as Array<'all' | ContentPack['style']>).map((item) => (
+              <button key={item} type="button" className={`choice-pill ${styleFilter === item ? 'active' : ''}`} onClick={() => setStyleFilter(item)}>
+                {item === 'all' ? 'All' : styleLabel(item)}
+              </button>
+            ))}
+            <select className="small-select" value={sort} onChange={(event) => setSort(event.target.value as 'date' | 'score')}>
+              <option value="date">Sort by date</option>
+              <option value="score">Sort by score</option>
+            </select>
+          </div>
+          <div className="mt-8 space-y-4">
+            {filteredPacks.map((pack) => <PackCard key={pack.id} pack={pack} onOpen={openPack} />)}
+            {!filteredPacks.length ? <p className="py-16 text-center text-sm text-muted">No packs yet.</p> : null}
+          </div>
+        </section>
+      ) : null}
+
+      <aside className={`settings-panel ${settingsOpen ? 'open' : ''}`}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-medium text-primary-text">Settings</h2>
+          <button type="button" className="icon-button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <label className="settings-field mt-8">
+          <span>OpenAI API Key</span>
+          <input type="password" value={settings.openaiApiKey} onChange={(event) => setSettings((current) => ({ ...current, openaiApiKey: event.target.value }))} />
+        </label>
+        <label className="settings-field">
+          <span>Audience</span>
+          <input value={settings.audience} onChange={(event) => setSettings((current) => ({ ...current, audience: event.target.value }))} />
+        </label>
+        <label className="settings-field">
+          <span>Default Style</span>
+          <select value={settings.defaultStyle} onChange={(event) => {
+            const nextStyle = event.target.value as ContentPack['style'];
+            setSettings((current) => ({ ...current, defaultStyle: nextStyle }));
+            setStyle(nextStyle);
+          }}>
+            {styles.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <button type="button" className="primary-button mt-6 w-full" onClick={() => setSettingsOpen(false)}>Save</button>
+        <p className="mt-4 text-xs leading-5 text-muted">Your API key is stored locally and never sent to our servers</p>
+      </aside>
+      {settingsOpen ? <button type="button" className="settings-backdrop" aria-label="Close settings" onClick={() => setSettingsOpen(false)} /> : null}
+    </main>
   );
 }

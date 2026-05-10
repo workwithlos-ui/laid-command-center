@@ -18,9 +18,12 @@ export interface ContentPack {
   theme: string;
   style: 'ai_news' | 'workflow' | 'system';
   created_at?: string;
+  source_kind?: string;
   impact_score?: number;
   adoption_score?: number;
   story_score?: number;
+  critic_score?: number;
+  selected_formats?: string[];
   long_post: {
     title: string;
     body_markdown: string;
@@ -43,6 +46,11 @@ export interface ContentPack {
   short_script: {
     title: string;
     beats: string[];
+  };
+  linkedin_post?: {
+    hook: string;
+    body: string;
+    cta: string;
   };
 }
 
