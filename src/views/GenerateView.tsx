@@ -1,271 +1,202 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle, Copy, ExternalLink, Loader2, Sparkles } from 'lucide-react';
+import { RotateCcw, Sparkles, ThumbsDown, ThumbsUp, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { renderMarkdown } from '@/lib/mdrender';
-import {
-  type AgentMemory,
-  type ContentEngineSettings,
-  type ContentStyle,
-  type GeneratedContentPack,
-  type PackRating,
-  type SourceMode,
-  generateContentPack,
-  updateMemoryFromPack,
-} from '@/lib/contentTeamEngine';
+import { GenerateModal } from '@/components/GenerateModal';
+import { PackCard } from '@/components/PackCard';
+import { PackDetailModal } from '@/components/PackDetailModal';
+import { Toast } from '@/components/Toast';
+import { useContentPacks } from '@/hooks/useContentPacks';
+import { generateContentPack } from '@/lib/contentGeneration';
+import type { GenerationProgress, GenerationRequest, PackRating } from '@/data/types';
+import type { StageLog } from '@/lib/pipeline';
 
-const styleOptions: Array<{ key: ContentStyle; label: string; description: string }> = [
-  { key: 'ai_news', label: 'AI News', description: 'Reactive update with real sources.' },
-  { key: 'workflow', label: 'Workflow', description: 'Step-by-step operator playbook.' },
-  { key: 'system', label: 'System', description: 'Reusable AI operating system.' },
+const suggestions = [
+  'AI agents that replace manual lead research',
+  'New OpenAI feature founders can use this week',
+  'A no-code workflow for turning sales calls into content',
+  'An operator SOP for finding $500K-$10M prospects',
 ];
-
-const sourceOptions: Array<{ key: SourceMode; label: string }> = [
-  { key: 'ai_news', label: 'AI News' },
-  { key: 'github_trending', label: 'GitHub Trending' },
-  { key: 'both', label: 'Both' },
-];
-
-const tabs: Array<{ key: keyof GeneratedContentPack['content']; label: string }> = [
-  { key: 'youtubeScript', label: 'YouTube' },
-  { key: 'linkedin', label: 'LinkedIn' },
-  { key: 'shortClips', label: 'Short Clips' },
-  { key: 'xThread', label: 'X Thread' },
-  { key: 'instagramCaption', label: 'IG' },
-  { key: 'carousel', label: 'Carousel' },
-  { key: 'email', label: 'Email' },
-  { key: 'blog', label: 'Blog' },
-];
-
-const defaultSettings: ContentEngineSettings = {
-  openaiApiKey: '',
-  audience: '$500K-$10M founders/operators',
-  defaultStyle: 'ai_news',
-  voiceTraining: '',
-  brandName: 'LAID',
-  handle: '@loshustle',
-  cta: "DM me the keyword and I'll send it.",
-};
 
 export function GenerateView() {
-  const [settings] = useLocalStorage<ContentEngineSettings>('laid-settings', defaultSettings);
-  const [packs, setPacks] = useLocalStorage<GeneratedContentPack[]>('laid-generated-packs', []);
-  const [memory, setMemory] = useLocalStorage<AgentMemory>('agentMemory', { corrections: [], bestPatterns: [] });
-  const [theme, setTheme] = useState('AI tools for founders');
-  const [style, setStyle] = useState<ContentStyle>(settings.defaultStyle || 'ai_news');
-  const [sourceMode, setSourceMode] = useState<SourceMode>('both');
-  const [activePackId, setActivePackId] = useState<string | null>(packs[0]?.id ?? null);
-  const [activeTab, setActiveTab] = useState<keyof GeneratedContentPack['content']>('youtubeScript');
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  const { packs, addPack, updatePack, deletePack, togglePosted, resetToSamples } = useContentPacks();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(packs[0]?.id ?? null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [stageLogs, setStageLogs] = useState<StageLog[]>([]);
+  const [tokensUsed, setTokensUsed] = useState(0);
+  const [usedRealPipeline, setUsedRealPipeline] = useState(false);
   const [toast, setToast] = useState('');
 
-  const activePack = useMemo(() => packs.find((p) => p.id === activePackId) || packs[0], [packs, activePackId]);
+  const selectedPack = useMemo(
+    () => packs.find((pack) => pack.id === selectedPackId) || packs[0] || null,
+    [packs, selectedPackId]
+  );
 
   const showToast = (message: string) => {
     setToast(message);
-    setTimeout(() => setToast(''), 2000);
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    showToast('Copied. Now go post it.');
-  };
+  const handleGenerate = async (request: GenerationRequest) => {
+    setIsGenerating(true);
+    setProgress({ stage: 'strategizing', message: 'Starting the six-agent content team...' });
+    setStageLogs([]);
+    setTokensUsed(0);
+    setUsedRealPipeline(false);
 
-  const handleGenerate = async () => {
-    setError('');
-    if (!settings.openaiApiKey?.trim()) {
-      setError('Add your OpenAI API key in Settings before generating new content. Existing seeded content still works without a key.');
-      return;
-    }
     try {
-      setLoading(true);
-      setStatus('Content Strategist is mapping the angle...');
-      const statusTimers = [
-        setTimeout(() => setStatus('Research Agent is building the source brief...'), 1600),
-        setTimeout(() => setStatus('Scriptwriter is writing the YouTube asset...'), 3600),
-        setTimeout(() => setStatus('Repurposer is creating platform formats...'), 5600),
-        setTimeout(() => setStatus('Editor is running the six quality gates...'), 7600),
-      ];
-      const pack = await generateContentPack({ theme, style, sourceMode, settings, memory, previousPacks: packs });
-      statusTimers.forEach(clearTimeout);
-      setStatus('Done. Pack added to the feed.');
-      setPacks((prev) => [pack, ...prev]);
-      setMemory(updateMemoryFromPack(memory, pack));
-      setActivePackId(pack.id);
-      setActiveTab('youtubeScript');
-      showToast('Generated content pack.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed.');
+      const pack = await generateContentPack(request, (nextProgress) => setProgress(nextProgress));
+      addPack(pack);
+      setSelectedPackId(pack.id);
+      setDetailOpen(true);
+      setUsedRealPipeline(Boolean(pack.agent_log?.length));
+      setTokensUsed((pack.agent_log || []).length * 1200);
+      showToast('Content pack generated.');
+      setModalOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Generation failed.';
+      setProgress({ stage: 'error', message });
+      showToast(message);
     } finally {
-      setLoading(false);
+      setIsGenerating(false);
     }
   };
 
-  const ratePack = (packId: string, rating: PackRating) => {
-    setPacks((prev) => prev.map((pack) => (pack.id === packId ? { ...pack, rating } : pack)));
+  const handleRate = (packId: string, rating: PackRating) => {
+    updatePack(packId, { rating });
+    showToast(rating === 'up' ? 'Saved as a good pattern.' : rating === 'down' ? 'Saved as a weak pattern.' : 'Rating saved.');
   };
+
+  const generatedCount = packs.filter((pack) => !pack.id.startsWith('sample')).length;
+  const postedCount = packs.filter((pack) => pack.posted).length;
+  const averageScore = packs.length
+    ? Math.round(packs.reduce((sum, pack) => sum + (pack.critic_score || pack.quality_score || 0), 0) / packs.length)
+    : 0;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Generate Content Pack</h2>
-          <p className="mt-1 text-xs text-[#666666]">Run the embedded six-agent content team against a real AI update or workflow angle.</p>
-        </div>
-        <Button className="h-9 bg-[#c9a84c] text-xs font-semibold text-black hover:bg-[#d8b85d]" onClick={handleGenerate} disabled={loading}>
-          {loading ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3" />}
-          Generate Pack
-        </Button>
-      </div>
-
-      <div className="rounded-lg border border-[#222222] bg-[#111111] p-5">
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-[#222222] bg-[#111111] p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <label className="mb-1 block text-xs font-medium text-[#a0a0a0]">Theme</label>
-            <Input
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-              placeholder="AI tools for founders"
-              className="h-10 border-[#222222] bg-[#0a0a0a] text-sm text-white placeholder:text-[#666666]"
-            />
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[#c9a84c]">Six-Agent Pipeline</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Generate Content Packs</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a0a0a0]">
+              Run the upgraded Kimi pipeline: Content Strategist, Research/News Finder, Relevance Filter, Long-Post Writer, Repurposer, and Editor Quality Gate.
+            </p>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#a0a0a0]">Source</label>
-            <div className="flex flex-wrap gap-2">
-              {sourceOptions.map((option) => (
-                <button
-                  key={option.key}
-                  className={`rounded-md border px-3 py-2 text-xs transition-colors ${sourceMode === option.key ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-[#222222] bg-[#0a0a0a] text-[#666666] hover:text-[#a0a0a0]'}`}
-                  onClick={() => setSourceMode(option.key)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {styleOptions.map((option) => (
-            <button
-              key={option.key}
-              className={`rounded-lg border p-4 text-left transition-colors ${style === option.key ? 'border-[#c9a84c] bg-[#c9a84c]/10' : 'border-[#222222] bg-[#0a0a0a] hover:border-[#333333]'}`}
-              onClick={() => setStyle(option.key)}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="h-9 border-[#333333] bg-transparent text-xs text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+              onClick={resetToSamples}
             >
-              <div className="text-sm font-semibold text-white">{option.label}</div>
-              <div className="mt-1 text-xs text-[#666666]">{option.description}</div>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset Samples
+            </Button>
+            <Button
+              className="h-9 bg-[#c9a84c] text-xs font-semibold text-black hover:bg-[#d8b85d]"
+              onClick={() => setModalOpen(true)}
+            >
+              <Sparkles className="mr-1 h-3.5 w-3.5" /> New Pack
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[#222222] bg-[#0a0a0a] p-4">
+            <div className="text-2xl font-semibold text-white">{packs.length}</div>
+            <div className="mt-1 text-xs text-[#666666]">Total packs</div>
+          </div>
+          <div className="rounded-xl border border-[#222222] bg-[#0a0a0a] p-4">
+            <div className="text-2xl font-semibold text-white">{generatedCount}</div>
+            <div className="mt-1 text-xs text-[#666666]">Generated in this workspace</div>
+          </div>
+          <div className="rounded-xl border border-[#222222] bg-[#0a0a0a] p-4">
+            <div className="text-2xl font-semibold text-white">{postedCount}</div>
+            <div className="mt-1 text-xs text-[#666666]">Marked posted · avg score {averageScore || '—'}</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#222222] bg-[#111111] p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <Wand2 className="h-4 w-4 text-[#c9a84c]" /> Fast angle suggestions
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              onClick={() => {
+                setModalOpen(true);
+                navigator.clipboard?.writeText(suggestion).catch(() => undefined);
+                showToast('Suggestion copied. Paste it into Custom Prompt.');
+              }}
+              className="rounded-full border border-[#222222] bg-[#0a0a0a] px-3 py-1.5 text-xs text-[#a0a0a0] transition-colors hover:border-[#c9a84c] hover:text-[#c9a84c]"
+            >
+              {suggestion}
             </button>
           ))}
         </div>
+      </section>
 
-        {(status || error) && (
-          <div className={`mt-4 rounded-md border px-3 py-2 text-xs ${error ? 'border-[#ef4444]/50 bg-[#ef4444]/10 text-[#ef4444]' : 'border-[#c9a84c]/40 bg-[#c9a84c]/10 text-[#c9a84c]'}`}>
-            {error || status}
-          </div>
-        )}
-      </div>
-
-      {packs.length > 0 && (
-        <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-          <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#666666]">Generated Packs</p>
-            {packs.slice(0, 8).map((pack) => (
-              <button
-                key={pack.id}
-                onClick={() => { setActivePackId(pack.id); setActiveTab('youtubeScript'); }}
-                className={`w-full rounded-lg border p-4 text-left transition-colors ${activePack?.id === pack.id ? 'border-[#c9a84c] bg-[#c9a84c]/10' : 'border-[#222222] bg-[#111111] hover:border-[#333333]'}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-white">{pack.title}</h3>
-                  <span className="rounded bg-[#1a1a1a] px-2 py-0.5 text-[10px] text-[#c9a84c]">{pack.criticScore}/40</span>
-                </div>
-                <p className="mt-2 line-clamp-2 text-xs text-[#666666]">{pack.summary}</p>
-                <div className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-[#666666]">
-                  <span>{pack.style.replace('_', ' ')}</span>
-                  <span>•</span>
-                  <span>{new Date(pack.date).toLocaleDateString()}</span>
-                </div>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {packs.map((pack) => (
+          <div key={pack.id} className="space-y-2">
+            <PackCard
+              pack={pack}
+              onClick={() => {
+                setSelectedPackId(pack.id);
+                setDetailOpen(true);
+              }}
+            />
+            <div className="flex items-center justify-between rounded-lg border border-[#222222] bg-[#0a0a0a] px-3 py-2">
+              <div className="flex items-center gap-1 text-[11px] text-[#666666]">
+                <span>Rate</span>
+                <button
+                  onClick={() => handleRate(pack.id, pack.rating === 'up' ? null : 'up')}
+                  className={`rounded px-2 py-1 ${pack.rating === 'up' ? 'bg-green-500/15 text-green-400' : 'text-[#666666] hover:text-green-400'}`}
+                >
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => handleRate(pack.id, pack.rating === 'down' ? null : 'down')}
+                  className={`rounded px-2 py-1 ${pack.rating === 'down' ? 'bg-red-500/15 text-red-400' : 'text-[#666666] hover:text-red-400'}`}
+                >
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <button onClick={() => togglePosted(pack.id)} className="text-[11px] text-[#c9a84c] hover:underline">
+                {pack.posted ? 'Unmark posted' : 'Mark posted'}
               </button>
-            ))}
-          </div>
-
-          {activePack && (
-            <div className="rounded-lg border border-[#222222] bg-[#111111]">
-              <div className="border-b border-[#222222] p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-white">{activePack.title}</h3>
-                    <p className="mt-1 text-xs text-[#666666]">{activePack.summary}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#666666]">
-                      <span className="rounded border border-[#c9a84c]/50 px-2 py-0.5 text-[#c9a84c]">{activePack.hookType}</span>
-                      <span>{activePack.desireMapping}</span>
-                      {activePack.sourceUrl && activePack.sourceUrl !== 'User-provided content' && (
-                        <a className="inline-flex items-center gap-1 text-[#c9a84c] hover:underline" href={activePack.sourceUrl} target="_blank" rel="noreferrer">
-                          Source <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <Button variant="outline" className="h-8 border-[#c9a84c] text-xs text-[#c9a84c] hover:bg-[#c9a84c]/10" onClick={() => handleCopy(activePack.content[activeTab])}>
-                    <Copy className="mr-1 h-3 w-3" /> Copy
-                  </Button>
-                </div>
-              </div>
-
-              <div className="border-b border-[#222222] px-5 py-3">
-                <div className="flex flex-wrap gap-1">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActiveTab(tab.key)}
-                      className={`rounded px-2 py-1 text-[10px] font-semibold uppercase transition-colors ${activeTab === tab.key ? 'bg-[#c9a84c] text-black' : 'bg-[#1a1a1a] text-[#666666] hover:text-[#a0a0a0]'}`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-5">
-                <div className="content-body max-h-[520px] overflow-y-auto rounded-md border border-[#222222] bg-[#0a0a0a] p-4 text-[12px] leading-relaxed text-[#a0a0a0]" dangerouslySetInnerHTML={{ __html: renderMarkdown(activePack.content[activeTab] || 'No content generated for this format.') }} />
-
-                <details className="mt-4 rounded-md border border-[#222222] bg-[#0a0a0a] p-3">
-                  <summary className="cursor-pointer text-xs font-medium text-[#a0a0a0]">Agent Log</summary>
-                  <div className="mt-3 space-y-2">
-                    {activePack.agentLog.map((entry, index) => (
-                      <div key={`${entry.agent}-${index}`} className="flex items-start justify-between gap-3 border-t border-[#1a1a1a] pt-2 text-xs">
-                        <div>
-                          <div className="font-medium text-white">{entry.agent}</div>
-                          <div className="mt-1 text-[#666666]">{entry.summary}</div>
-                        </div>
-                        {entry.score ? <span className="text-[#c9a84c]">{entry.score}/40</span> : <CheckCircle className="h-3 w-3 text-[#22c55e]" />}
-                      </div>
-                    ))}
-                  </div>
-                </details>
-
-                <div className="mt-4 flex items-center gap-2 text-xs text-[#666666]">
-                  <span>Rate this pack</span>
-                  {(['up', 'neutral', 'down'] as PackRating[]).map((rating) => (
-                    <button key={rating || 'none'} onClick={() => ratePack(activePack.id, rating)} className={`rounded border px-2 py-1 ${activePack.rating === rating ? 'border-[#c9a84c] text-[#c9a84c]' : 'border-[#222222] text-[#666666]'}`}>
-                      {rating === 'up' ? 'Good' : rating === 'neutral' ? 'Okay' : 'Weak'}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        ))}
+      </section>
 
-      {toast && (
-        <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 lg:bottom-8">
-          <div className="rounded-lg border border-[#c9a84c] bg-[#111111] px-4 py-3 text-sm font-medium text-white shadow-lg">{toast}</div>
-        </div>
-      )}
+      <GenerateModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onGenerate={handleGenerate}
+        isGenerating={isGenerating}
+        progress={progress}
+        stageLogs={stageLogs}
+        usedRealPipeline={usedRealPipeline}
+        tokensUsed={tokensUsed}
+      />
+
+      <PackDetailModal
+        pack={selectedPack}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onTogglePosted={togglePosted}
+        onDelete={(id) => {
+          deletePack(id);
+          setDetailOpen(false);
+          showToast('Content pack deleted.');
+        }}
+      />
+
+      <Toast message={toast} visible={Boolean(toast)} onClose={() => setToast('')} />
     </div>
   );
 }
