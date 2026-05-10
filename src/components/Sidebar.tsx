@@ -5,6 +5,7 @@ import {
   Command,
   LibraryBig,
   Sparkles,
+  Settings,
 } from 'lucide-react';
 
 const navItems = [
@@ -12,6 +13,7 @@ const navItems = [
   { path: '/generate', label: 'Generate', icon: Sparkles },
   { path: '/agents', label: 'Agent Studio', icon: BrainCircuit },
   { path: '/memory', label: 'Brand Memory', icon: LibraryBig },
+  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -63,7 +65,7 @@ export function Sidebar() {
         </nav>
       </aside>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-16 grid-cols-4 border-t border-white/10 bg-[#050508]/88 backdrop-blur-2xl lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-16 grid-cols-5 border-t border-white/10 bg-[#050508]/88 backdrop-blur-2xl lg:hidden">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;

@@ -5,6 +5,7 @@ import { DashboardView } from '@/views/DashboardView';
 import { GenerateView } from '@/views/GenerateView';
 import { AgentStudioView } from '@/views/AgentStudioView';
 import { BrandMemoryView } from '@/views/BrandMemoryView';
+import { Settings } from '@/views/Settings';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/generate" element={<GenerateView />} />
             <Route path="/agents" element={<AgentStudioView />} />
             <Route path="/memory" element={<BrandMemoryView />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

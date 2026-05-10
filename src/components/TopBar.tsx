@@ -5,6 +5,7 @@ const pageTitles: Record<string, { title: string; eyebrow: string }> = {
   '/generate': { title: 'Generate', eyebrow: 'Six-agent content sprint' },
   '/agents': { title: 'Agent Studio', eyebrow: 'Your autonomous content team' },
   '/memory': { title: 'Brand Memory', eyebrow: 'Voice, hooks, objections, phrases' },
+  '/settings': { title: 'Settings', eyebrow: 'OpenAI API key and defaults' },
 };
 
 export function TopBar() {
