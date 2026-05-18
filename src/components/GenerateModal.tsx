@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, Wand2, Loader2, Bug, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-react';
 import {
   Dialog,
@@ -51,12 +51,8 @@ export function GenerateModal({
   const [customPrompt, setCustomPrompt] = useState('');
   const [theme, setTheme] = useState('AI updates that actually change workflow');
   const [style, setStyle] = useState<ContentStyle>('ai_news');
-  const [hasKey, setHasKey] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-
-  useEffect(() => {
-    setHasKey(isUsingRealPipeline());
-  }, [open]);
+  const hasKey = isUsingRealPipeline();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +119,7 @@ export function GenerateModal({
             {hasKey ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-400">
                 <Wifi className="size-3" />
-                4-Agent Pipeline
+                Agent Pipeline
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#c9a84c]/10 px-2 py-0.5 text-[11px] font-medium text-[#c9a84c]">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CheckCircle2, Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,13 +53,9 @@ function saveOpenAIKey(openaiApiKey: string) {
 }
 
 export function SettingsView() {
-  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState(() => readSavedOpenAIKey());
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setOpenaiApiKey(readSavedOpenAIKey());
-  }, []);
 
   const handleSave = () => {
     saveOpenAIKey(openaiApiKey);

@@ -20,7 +20,11 @@ import type {
 import { callAgent, isValidApiKey } from './openai';
 import type { OpenAIConfig } from './openai';
 import { generateMockPack } from './mockGeneration';
+import { buildAgentArtifacts } from './agentArtifacts';
+import { buildDerivedOutputs } from './derivedOutputs';
 import { buildFixPrompt, runQualityGate } from './qualityGate';
+import { buildWarRoomMemoryContext } from './warRoomMemory';
+import { buildClientWorkspaceContext, getActiveClientWorkspace } from './clientWorkspace';
 
 export interface PipelineOptions {
   openaiKey: string;
@@ -107,6 +111,17 @@ function buildMemoryAddendum(): string {
     const ratedTop = Array.isArray(previous) ? previous.filter((pack) => pack.rating === 'up' || pack.user_rating === 'up').slice(-5) : [];
 
     const lines: string[] = [];
+    const clientWorkspace = getActiveClientWorkspace();
+    const brandMemoryRaw = localStorage.getItem(`content-command-brand-memory-${clientWorkspace.id}`) || localStorage.getItem('content-command-brand-memory');
+    const brandMemory = brandMemoryRaw ? JSON.parse(brandMemoryRaw) : null;
+    if (brandMemory) {
+      lines.push('CLIENT BRAND MEMORY:');
+      if (brandMemory.voiceRules) lines.push(`- Voice rules: ${brandMemory.voiceRules}`);
+      if (brandMemory.winningHooks) lines.push(`- Winning hooks: ${brandMemory.winningHooks}`);
+      if (brandMemory.audienceObjections) lines.push(`- Audience objections: ${brandMemory.audienceObjections}`);
+      if (brandMemory.approvedPhrases) lines.push(`- Approved phrases: ${brandMemory.approvedPhrases}`);
+      if (brandMemory.bannedPhrases) lines.push(`- Banned phrases: ${brandMemory.bannedPhrases}`);
+    }
     if (corrections.length) {
       lines.push('LESSONS FROM PAST GENERATIONS, avoid these issues:');
       corrections.forEach((c: { date?: string; agent?: string; score?: number | string; issue?: string; summary?: string }) => lines.push(`- ${c.date || 'unknown date'}, ${c.agent || 'agent'}, score ${c.score || 'N/A'}: ${c.issue || c.summary || 'quality issue'}`));
@@ -119,6 +134,10 @@ function buildMemoryAddendum(): string {
       lines.push('USER-RATED TOP PACKS HAD THESE CHARACTERISTICS:');
       ratedTop.forEach((p) => lines.push(`- ${p.hookType || p.hook_type || p.strategy?.hook_type || 'hook'}, ${p.desireMapping || p.desire_mapping || p.strategy?.desire_mapping || 'desire'}, ${p.style || 'style'}, ${p.title || p.tool_name || 'topic'}.`));
     }
+    const clientContext = buildClientWorkspaceContext(clientWorkspace);
+    if (clientContext) lines.push(clientContext);
+    const warRoomMemory = buildWarRoomMemoryContext();
+    if (warRoomMemory) lines.push(warRoomMemory);
     return lines.length ? `\n${lines.join('\n')}` : '';
   } catch {
     return '';
@@ -137,6 +156,7 @@ export async function runPipeline(
   onProgress: (progress: GenerationProgress) => void
 ): Promise<PipelineResult> {
   const { sourceUrl = '', theme, style, customPrompt } = request;
+  const clientWorkspace = request.clientWorkspace || getActiveClientWorkspace();
   const audience = options.audience || '$500K-$10M founders/operators';
   const stageLogs: StageLog[] = [];
   let totalTokens = 0;
@@ -219,25 +239,39 @@ export async function runPipeline(
   finishStage(stageLogs, repurposeStage, 'done', repurposerResult.data, repurposerResult.tokensUsed);
 
   const slug = safeSlug(selected.tool_name);
-  const buildPackDraft = (): ContentPack => ({
-    id: `${slug}-${selected.publish_date || new Date().toISOString().slice(0, 10)}-${Date.now().toString(36)}`,
-    tool_name: selected.tool_name,
-    source_url: selected.source_url,
-    summary: selected.summary,
-    audience,
-    theme,
-    style,
-    created_at: new Date().toISOString(),
-    posted: false,
-    long_post: { title: longPost.title, body_markdown: longPost.body_markdown },
-    x_thread: repurposed.x_thread,
-    ig_caption: repurposed.ig_caption,
-    carousel: repurposed.carousel,
-    short_script: repurposed.short_script,
-    strategy,
-    source_brief: newsResult.data!.source_brief,
-    agent_log: stageLogs.map((log) => ({ agent: log.stage, summary: log.status, score: log.stage === 'deterministic_quality_gate' ? Math.round(qualityReport.score / 2.5) : undefined })),
-  });
+  const buildPackDraft = (): ContentPack => {
+    const draft: ContentPack = {
+      id: `${slug}-${selected.publish_date || new Date().toISOString().slice(0, 10)}-${Date.now().toString(36)}`,
+      tool_name: selected.tool_name,
+      source_url: selected.source_url,
+      summary: selected.summary,
+      audience,
+      theme,
+      client_workspace_id: clientWorkspace.id,
+      client_name: clientWorkspace.name,
+      style,
+      created_at: new Date().toISOString(),
+      posted: false,
+      long_post: { title: longPost.title, body_markdown: longPost.body_markdown },
+      ...buildDerivedOutputs({
+        title: longPost.title,
+        hook: repurposed.x_thread.hook,
+        body: longPost.body_markdown,
+        summary: selected.summary,
+        cta: repurposed.ig_caption.cta,
+      }),
+      x_thread: repurposed.x_thread,
+      ig_caption: repurposed.ig_caption,
+      carousel: repurposed.carousel,
+      short_script: repurposed.short_script,
+      strategy,
+      source_brief: { generated: newsResult.data!.source_brief, approved: request.approvedBrief },
+      source_intelligence: request.sourceIntelligence,
+      approved_brief: request.approvedBrief,
+      agent_log: stageLogs.map((log) => ({ agent: log.stage, summary: log.status, score: log.stage === 'deterministic_quality_gate' ? Math.round(qualityReport.score / 2.5) : undefined })),
+    };
+    return { ...draft, agent_outputs: buildAgentArtifacts(request, draft, qualityReport) };
+  };
   let packDraft: ContentPack = buildPackDraft();
 
   const editorStage = startStage(stageLogs, 'editor_quality_gate');
@@ -281,19 +315,21 @@ export async function runPipeline(
     const editorSecondResult = await callAgent<EditorOutput>(openaiConfig, buildEditorPrompt(packDraft, qualityReport, newsResult.data!.source_brief, 2), { label: 'editor_quality_gate_pass_2' });
     const finalEditor = editorSecondResult.success && editorSecondResult.data ? editorSecondResult.data : editorFirstResult.data;
     totalTokens += editorSecondResult.tokensUsed || 0;
-    packDraft.editor_review = { first_pass: editorFirstResult.data, second_pass: editorSecondResult.data || null, final: finalEditor };
-    packDraft.critic_score = finalEditor.total_points ?? finalEditor.critic_score;
-    packDraft.quality_score = qualityReport.score;
-    packDraft.agent_log = [
+	    packDraft.editor_review = { first_pass: editorFirstResult.data, second_pass: editorSecondResult.data || null, final: finalEditor };
+	    packDraft.critic_score = finalEditor.total_points ?? finalEditor.critic_score;
+	    packDraft.quality_score = qualityReport.score;
+	    packDraft.agent_outputs = buildAgentArtifacts(request, packDraft, qualityReport);
+	    packDraft.agent_log = [
       ...(packDraft.agent_log || []),
       { agent: 'editor_quality_gate_pass_1', summary: editorFirstResult.data.approved_summary || editorFirstResult.data.decision, score: editorFirstResult.data.total_points ?? editorFirstResult.data.critic_score },
       { agent: 'editor_quality_gate_pass_2', summary: finalEditor.approved_summary || finalEditor.decision, score: finalEditor.total_points ?? finalEditor.critic_score },
     ];
     finishStage(stageLogs, editorStage, finalEditor.decision === 'REJECT' ? 'error' : 'done', packDraft.editor_review, (editorFirstResult.tokensUsed || 0) + (editorSecondResult.tokensUsed || 0));
-  } else {
-    packDraft.quality_score = qualityReport.score;
-    packDraft.critic_score = Math.round(qualityReport.score / 2.5);
-    packDraft.agent_log = [
+	  } else {
+	    packDraft.quality_score = qualityReport.score;
+	    packDraft.critic_score = Math.round(qualityReport.score / 2.5);
+	    packDraft.agent_outputs = buildAgentArtifacts(request, packDraft, qualityReport);
+	    packDraft.agent_log = [
       ...(packDraft.agent_log || []),
       { agent: 'editor_quality_gate', summary: editorFirstResult.error || 'Editor unavailable, deterministic gate used.', score: packDraft.critic_score },
     ];

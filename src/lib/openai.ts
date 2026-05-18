@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// OpenAI API Client — JSON-mode calls with retries
+// OpenAI API Client - JSON-mode calls with retries
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface OpenAIConfig {

@@ -1,4 +1,5 @@
 import type { ContentPack, ContentStyle } from '@/data/types';
+import { contentPipelineAgents } from '@/agents';
 
 export interface NewsCandidate {
   tool_name: string;
@@ -132,11 +133,44 @@ Purpose: build a hands-off AI-powered content engine that drives qualified consu
 Primary channel: YouTube @loshustle as the engine, repurposed across platforms.
 ICP: business owners doing $500K-$10M in home services, DTC, agencies, and local services.
 Core principle: every piece must generate a qualified lead or move an existing lead closer to a consulting engagement. No vanity metrics. No content for content's sake.
-Six-agent engine: Content Strategist, Research and News Finder, Relevance Filter, Long-Post Writer, Repurposer, Editor and Quality Gate.
+Elite agent pipeline: Research, Organize, Optimize, Write, Source Check, Edit, Tonality Check, Engagement Check.
 Repurposing pipeline: one original content engine becomes short clips, LinkedIn, X thread, Instagram caption, carousel, email, blog, visual assets, and lead magnet ideas.
 Voice identity: direct, experienced, slightly provocative, built things, broken things, no time for theory. Speaks to business owners like a peer in the trenches.
 Six gates: Tactical, Specific, Honest, Structured, Voice-Aligned, Fact-Checked.
 `;
+
+const elitePipelineFramework = `
+SAVANT-LEVEL AGENT OPERATING SYSTEM:
+1. Research: gather source context, dates, claims, proof, buyer language, creator saturation, and unanswered questions.
+2. Organize: turn messy inputs into a clear brief with angle, audience, offer, proof, risks, and desired outcome.
+3. Optimize: score the angle for novelty, pain, proof, lead potential, platform fit, and usefulness before writing.
+4. Write: produce the core asset with hook, story or real context, tactical steps, proof, and CTA.
+5. Source Check: verify every factual claim against the source brief. Mark unsupported claims and remove weak claims.
+6. Edit: tighten structure, specificity, clarity, and conversion intent. Reject generic filler.
+7. Tonality Check: enforce brand voice, banned words, sentence length, plain language, and no em dashes.
+8. Engagement Check: improve the first line, payoff, shareability, CTA, and platform-native formatting.
+
+RECURSIVE LEARNING:
+- Save what the user approves, edits, rejects, copies, posts, and rates.
+- Save editor failures as exact rules, not vague notes.
+- If the same failure appears 3 or more times, promote it to a permanent prompt rule.
+- Prefer original source material, user stories, real examples, and performance data over generic AI commentary.
+`;
+
+const modularAgentPromptRegistry = contentPipelineAgents
+  .map((agent) => {
+    const criteria = agent.qualityCriteria.map((item) => `- ${item.name}: ${item.description}`).join('\n');
+    return `AGENT MODULE: ${agent.name}
+Role: ${agent.role}
+Prompt version: ${agent.promptVersion}
+System prompt:
+${agent.systemPrompt}
+Input contract: ${agent.contract.input.join(', ')}
+Output contract: ${agent.contract.output.join(', ')}
+Quality criteria:
+${criteria}`;
+  })
+  .join('\n\n');
 
 const losVoiceRules = `
 LOS_VOICE.md RULES EMBEDDED:
@@ -210,12 +244,12 @@ EDITOR AGENT 40-POINT QUALITY GATE EMBEDDED:
 `;
 
 export const AGENT_SYSTEM_PROMPTS = {
-  strategist: `${architectureOverview}\n${researchIntelligence}\n${kallawayFramework}\n${losVoiceRules}`,
-  research: `${architectureOverview}\n${researchIntelligence}\n${losVoiceRules}`,
-  relevance: `${architectureOverview}\n${researchIntelligence}\n${losVoiceRules}`,
-  writer: `${architectureOverview}\n${kallawayFramework}\n${losVoiceRules}`,
-  repurposer: `${architectureOverview}\n${kallawayFramework}\n${hormoziTweetMethod}\n${losVoiceRules}`,
-  editor: `${architectureOverview}\n${criticFramework}\n${losVoiceRules}`,
+  strategist: `${architectureOverview}\n${elitePipelineFramework}\n${modularAgentPromptRegistry}\n${researchIntelligence}\n${kallawayFramework}\n${losVoiceRules}`,
+  research: `${architectureOverview}\n${elitePipelineFramework}\n${modularAgentPromptRegistry}\n${researchIntelligence}\n${losVoiceRules}`,
+  relevance: `${architectureOverview}\n${elitePipelineFramework}\n${modularAgentPromptRegistry}\n${researchIntelligence}\n${losVoiceRules}`,
+  writer: `${architectureOverview}\n${elitePipelineFramework}\n${modularAgentPromptRegistry}\n${kallawayFramework}\n${losVoiceRules}`,
+  repurposer: `${architectureOverview}\n${elitePipelineFramework}\n${modularAgentPromptRegistry}\n${kallawayFramework}\n${hormoziTweetMethod}\n${losVoiceRules}`,
+  editor: `${architectureOverview}\n${elitePipelineFramework}\n${modularAgentPromptRegistry}\n${criticFramework}\n${losVoiceRules}`,
 };
 
 export function buildStrategistPrompt(theme: string, audience: string, previousContext = ''): string {
@@ -424,19 +458,21 @@ Good tone example:
 Bad tone example:
 "This revolutionary AI tool will transform your workflow."
 
-Required structure:
-1. Hook. Use the Kallaway framework. The hook must map to one Four Horsemen desire: money, status, time, or safety.
-2. What changed or the problem.
-3. 3 to 4 concrete steps with specific tools, prompts, numbers, and timeframes.
-4. Wrap-up with a CTA.
+	Required structure:
+	1. Hook. Use the Kallaway framework. The hook must map to one Four Horsemen desire: money, status, time, or safety.
+	2. Story or real context. Use a real test, founder observation, source-backed scenario, or honest operator framing. Do not write short generic paragraphs.
+	3. What changed or the problem.
+	4. 3 to 4 tactical steps with specific tools, prompts, numbers, and timeframes.
+	5. Wrap-up with a CTA.
 
 Approved style variations:
 - ai_news: what changed, why it matters, 2 to 3 concrete use cases, and how to test it this week.
 - workflow: pure tactical SOP with steps, prompts, tools, measurement, and expected result.
 - system: story, framework, concrete steps, honest limitation, and CTA.
 
-Hard requirements:
-- Minimum 500 words. Maximum 1500 words.
+	Hard requirements:
+	- Minimum 500 words. Maximum 1500 words.
+	- Must include a hook, story or real context, tactical steps, and CTA.
 - Include at least one specific number.
 - Include at least one real tool name.
 - Include one "do this right now" action.

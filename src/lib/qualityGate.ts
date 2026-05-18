@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// Quality Gate — Enforces 6 Gate Principles on Generated Content
+// Quality Gate - Enforces 6 Gate Principles on Generated Content
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface QualityReport {
@@ -39,12 +39,33 @@ const INVENTED_STAT_PATTERNS = [
   /picture this:/i,
 ];
 
+const MINIMUM_WORD_COUNT = 500;
+
 /**
  * Run the full quality gate on a content pack's long post.
  * Returns a report with pass/fail, score, and fix instructions.
  */
 export function runQualityGate(bodyMarkdown: string): QualityReport {
   const violations: Violation[] = [];
+  const wordCount = bodyMarkdown.trim().split(/\s+/).filter(Boolean).length;
+
+  if (wordCount < MINIMUM_WORD_COUNT) {
+    violations.push({
+      rule: 'minimum_length',
+      severity: 'error',
+      message: `Content is ${wordCount} words. Minimum is ${MINIMUM_WORD_COUNT} words before it can pass.`,
+      location: 'body',
+    });
+  }
+
+  if (bodyMarkdown.includes('\u2014')) {
+    violations.push({
+      rule: 'no_em_dash',
+      severity: 'error',
+      message: 'Em dash found. Replace every em dash with a comma, period, colon, or parentheses.',
+      location: 'body',
+    });
+  }
 
   // ── Rule 1: At least one concrete action ──
   const actionPatterns = [
@@ -150,6 +171,18 @@ export function runQualityGate(bodyMarkdown: string): QualityReport {
     });
   }
 
+  const hasHookSignal = /\b(hook|here'?s|this is|most people|stop|if you|i tested|i built|the problem)\b/i.test(bodyMarkdown.slice(0, 500));
+  const hasStoryOrContext = /\b(i tested|i built|client|founder|operator|customer|source|according to|what changed|the problem|case study|example)\b/i.test(bodyMarkdown);
+  const hasStepStructure = /\b(1\.|2\.|3\.|step 1|step 2|step 3|first,|second,|third,|do this)\b/i.test(bodyMarkdown);
+  if (!hasHookSignal || !hasStoryOrContext || !hasStepStructure || !hasCTA) {
+    violations.push({
+      rule: 'required_structure',
+      severity: 'error',
+      message: 'Missing required structure. Content needs a hook, story or real context, tactical steps, and CTA before it can pass.',
+      location: 'body',
+    });
+  }
+
   // ── Rule 7: No invented stats / hypotheticals ──
   const inventedStats: string[] = [];
   for (const pattern of INVENTED_STAT_PATTERNS) {
@@ -184,6 +217,9 @@ export function runQualityGate(bodyMarkdown: string): QualityReport {
   // ── Generate Fix Instructions ──
   const fixInstructions = violations.map(v => {
     if (v.rule === 'concrete_action') return 'Add a numbered step-by-step process or setup guide that someone can follow this week.';
+    if (v.rule === 'minimum_length') return `Expand the draft to at least ${MINIMUM_WORD_COUNT} words with proof, examples, and tactical steps.`;
+    if (v.rule === 'no_em_dash') return 'Remove every em dash. Use commas, periods, colons, or parentheses.';
+    if (v.rule === 'required_structure') return 'Rewrite with a clear hook, story or real context, tactical steps, and a CTA.';
     if (v.rule === 'specific_numbers') return 'Add specific dollar amounts, time savings, or metric improvements. Use real numbers from the source update.';
     if (v.rule === 'no_buzzwords') return 'Replace buzzwords with plain language. Write like you are explaining to a 48-year-old business owner.';
     if (v.rule === 'sentence_length') return 'Break long sentences into 2 shorter ones. Aim for 15-20 words per sentence.';
@@ -214,7 +250,7 @@ export function buildFixPrompt(
 ): string {
   return `${originalPrompt}
 
-IMPORTANT — The previous output failed quality checks (score: ${report.score}/100).
+IMPORTANT - The previous output failed quality checks (score: ${report.score}/100).
 Fix these issues and regenerate:
 
 ${report.fixInstructions.map((fix, i) => `${i + 1}. ${fix}`).join('\n')}

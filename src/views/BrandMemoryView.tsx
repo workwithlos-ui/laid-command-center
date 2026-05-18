@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertCircle, Ban, CheckCircle2, ClipboardList, Lightbulb, MessageCircleQuestion, PenLine, Quote, Save, Sparkles, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useContentPacks } from '@/hooks/useContentPacks';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { getActiveClientWorkspace } from '@/lib/clientWorkspace';
 
 const defaultMemory = {
   voiceRules: 'Direct, tactical, operator-grade. Use short sentences, concrete examples, and clear implementation language. Avoid generic AI hype.',
@@ -27,9 +28,16 @@ const sections: Array<{ key: MemoryKey; title: string; description: string; icon
 ];
 
 export function BrandMemoryView() {
+  const [activeWorkspace] = useState(() => getActiveClientWorkspace());
   const { packs } = useContentPacks();
-  const [memory, setMemory] = useLocalStorage<MemoryState>('content-command-brand-memory', defaultMemory);
-  const [savedAt, setSavedAt] = useLocalStorage<string>('content-command-brand-memory-saved', '');
+  const [memory, setMemory] = useLocalStorage<MemoryState>(`content-command-brand-memory-${activeWorkspace.id}`, {
+    ...defaultMemory,
+    voiceRules: activeWorkspace.voiceRules || defaultMemory.voiceRules,
+    audienceObjections: `${defaultMemory.audienceObjections}\n\nClient audience: ${activeWorkspace.audience}`,
+    approvedPhrases: `${defaultMemory.approvedPhrases}, ${activeWorkspace.offer}`,
+    bannedPhrases: activeWorkspace.bannedPhrases || defaultMemory.bannedPhrases,
+  });
+  const [savedAt, setSavedAt] = useLocalStorage<string>(`content-command-brand-memory-saved-${activeWorkspace.id}`, '');
 
   const learnings = useMemo(() => {
     const liked = packs.filter((pack) => pack.rating === 'up');
@@ -71,7 +79,7 @@ export function BrandMemoryView() {
             <p className="text-[11px] uppercase tracking-[0.28em] text-[#22D3EE]">Brand Memory</p>
             <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-[#F8FAFC] md:text-5xl">The taste layer behind every agent.</h2>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-[#A1A1AA]">
-              Keep the brand’s voice rules, hook patterns, objections, and phrase library in one editable memory layer so future content becomes more distinctive over time.
+              Keep {activeWorkspace.name}'s voice rules, hook patterns, objections, and phrase library in one editable memory layer so future content becomes more distinctive over time.
             </p>
           </div>
           <Button onClick={() => setSavedAt(new Date().toLocaleString())} className="h-12 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#22D3EE] px-5 text-sm font-semibold text-white shadow-[0_0_34px_rgba(168,85,247,0.22)] hover:opacity-95">

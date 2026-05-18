@@ -35,14 +35,78 @@ export interface Prospect {
 
 export type ContentStyle = 'ai_news' | 'workflow' | 'system';
 
-export type OutputFormat = 'long_post' | 'x_thread' | 'ig_caption' | 'carousel' | 'short_script';
+export type OutputFormat = 'long_post' | 'linkedin_post' | 'x_thread' | 'ig_caption' | 'carousel' | 'short_script' | 'email' | 'blog' | 'lead_magnet';
+
+export type GenerationInputMode = 'paste_content' | 'youtube_url' | 'voice_record' | 'interview';
 
 export type PackRating = 'up' | 'neutral' | 'down' | null;
+
+export interface ClientWorkspace {
+  id: string;
+  name: string;
+  industry: string;
+  offer: string;
+  audience: string;
+  voiceRules: string;
+  proofAssets: string;
+  bannedPhrases: string;
+  cta: string;
+  status: 'active' | 'paused';
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface AgentLogEntry {
   agent: string;
   summary: string;
   score?: number;
+}
+
+export type AgentArtifactKey =
+  | 'researcher'
+  | 'organizer'
+  | 'optimizer'
+  | 'writer'
+  | 'source_checker'
+  | 'editor'
+  | 'tonality_checker'
+  | 'engagement_checker';
+
+export interface AgentArtifact {
+  key: AgentArtifactKey;
+  name: string;
+  status: 'waiting' | 'running' | 'done' | 'error';
+  produced: string;
+  issuesCaught: string[];
+  score: number;
+  details: Array<{ label: string; value: string }>;
+  recommendations: string[];
+  updatedAt: string;
+}
+
+export interface SourceIntelligenceSummary {
+  sourceMode: GenerationInputMode;
+  sourceLength: number;
+  primaryLinks: string[];
+  publishDates: string[];
+  exactClaims: Array<{ claim: string; status: 'verified' | 'weak' | 'unsupported'; sourceReference: string }>;
+  proofSnippets: string[];
+  audiencePainLanguage: string[];
+  marketNarrative: string[];
+  differentiatedAngles: string[];
+  riskFlags: string[];
+}
+
+export interface ContentBriefSummary {
+  angle: string;
+  targetAudience: string;
+  hookPromise: string;
+  whyNow: string;
+  proofAvailable: string[];
+  contentStructure: string[];
+  cta: string;
+  riskFlags: string[];
+  approvedAt?: string;
 }
 
 export interface LongPost {
@@ -59,6 +123,43 @@ export interface IGCaption {
   hook: string;
   body: string;
   cta: string;
+}
+
+export interface LinkedInPost {
+  hook: string;
+  body: string;
+  cta: string;
+}
+
+export interface EmailOutput {
+  subject: string;
+  preview: string;
+  body: string;
+  cta: string;
+}
+
+export interface BlogOutput {
+  title: string;
+  body_markdown: string;
+}
+
+export interface LeadMagnetOutput {
+  title: string;
+  outline: string[];
+  cta: string;
+}
+
+export interface PackPerformance {
+  views?: number;
+  likes?: number;
+  comments?: number;
+  saves?: number;
+  shares?: number;
+  dms?: number;
+  bookedCalls?: number;
+  revenue?: number;
+  notes?: string;
+  updatedAt: string;
 }
 
 export interface CarouselSlide {
@@ -82,21 +183,31 @@ export interface ContentPack {
   summary: string;
   audience: string;
   theme: string;
+  client_workspace_id?: string;
+  client_name?: string;
   style: ContentStyle;
   created_at: string;
   posted: boolean;
   long_post: LongPost;
+  linkedin_post?: LinkedInPost;
   x_thread: XThread;
   ig_caption: IGCaption;
   carousel: Carousel;
   short_script: ShortScript;
+  email?: EmailOutput;
+  blog?: BlogOutput;
+  lead_magnet?: LeadMagnetOutput;
   strategy?: unknown;
   source_brief?: unknown;
+  source_intelligence?: SourceIntelligenceSummary;
+  approved_brief?: ContentBriefSummary;
   editor_review?: unknown;
   agent_log?: AgentLogEntry[];
+  agent_outputs?: AgentArtifact[];
   quality_score?: number;
   critic_score?: number;
   rating?: PackRating;
+  performance?: PackPerformance;
 }
 
 export interface ApiKeys {
@@ -110,13 +221,21 @@ export interface GenerationSettings {
   defaultStyle: ContentStyle;
   theme: string;
   voiceTraining?: string;
+  clientWorkspace?: ClientWorkspace;
 }
 
 export interface GenerationRequest {
   sourceUrl: string;
   theme: string;
   style: ContentStyle;
+  inputMode?: GenerationInputMode;
   customPrompt?: string;
+  sourceContent?: string;
+  voiceTranscript?: string;
+  interviewNotes?: string;
+  sourceIntelligence?: SourceIntelligenceSummary;
+  approvedBrief?: ContentBriefSummary;
+  clientWorkspace?: ClientWorkspace;
 }
 
 export interface GenerationProgress {
@@ -127,18 +246,26 @@ export interface GenerationProgress {
 
 export const formatLabels: Record<OutputFormat, string> = {
   long_post: 'Long Post',
+  linkedin_post: 'LinkedIn',
   x_thread: 'X Thread',
   ig_caption: 'IG Caption',
   carousel: 'Carousel',
   short_script: 'Short Script',
+  email: 'Email',
+  blog: 'Blog',
+  lead_magnet: 'Lead Magnet',
 };
 
 export const formatDescriptions: Record<OutputFormat, string> = {
   long_post: 'LinkedIn-style long-form post (500-1,500 words)',
+  linkedin_post: 'Native LinkedIn post with hook, body, and CTA',
   x_thread: '8-12 tweet thread with hook',
   ig_caption: 'Hook + body + CTA for Instagram',
   carousel: '8-12 slide outline with titles and bullets',
   short_script: '45-60 second video script with beats',
+  email: 'Subject, preview, body, and CTA',
+  blog: 'SEO-ready blog draft',
+  lead_magnet: 'Downloadable asset outline and CTA',
 };
 
 export const styleLabels: Record<ContentStyle, string> = {

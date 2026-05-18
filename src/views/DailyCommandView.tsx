@@ -142,7 +142,7 @@ export function DailyCommandView() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-[#c9a84c]" />
-          <h2 className="text-sm font-semibold text-white">Top 3 Priorities — Least Used Topics</h2>
+          <h2 className="text-sm font-semibold text-white">Top 3 Priorities - Least Used Topics</h2>
         </div>
 
         {featuredTopics.map((topic, index) => {

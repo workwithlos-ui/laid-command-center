@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// Content Generation — Public API
+// Content Generation - Public API
 // Routes to the real six-agent pipeline (OpenAI API) or mock fallback.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -10,6 +10,7 @@ import type {
 } from '@/data/types';
 import { isValidApiKey } from './openai';
 import { runPipelineWithFallback } from './pipeline';
+import { getActiveClientWorkspace } from './clientWorkspace';
 
 export type { GenerationRequest, GenerationProgress } from '@/data/types';
 
@@ -28,13 +29,14 @@ export async function generateContentPack(
   const laidSettingsRaw = localStorage.getItem('laid-settings');
   const kimiSettings = kimiSettingsRaw ? JSON.parse(kimiSettingsRaw) : {};
   const laidSettings = laidSettingsRaw ? JSON.parse(laidSettingsRaw) : {};
+  const activeWorkspace = request.clientWorkspace || kimiSettings.clientWorkspace || laidSettings.clientWorkspace || getActiveClientWorkspace();
   const openaiKey = kimiSettings.apiKeys?.openai || laidSettings.openaiApiKey || '';
   const perplexityKey = kimiSettings.apiKeys?.perplexity || '';
-  const audience = kimiSettings.audience || laidSettings.audience || '$500K-$10M founders/operators';
-  const voiceTraining = kimiSettings.voiceTraining || laidSettings.voiceTraining || '';
+  const audience = activeWorkspace.audience || kimiSettings.audience || laidSettings.audience || '$500K-$10M founders/operators';
+  const voiceTraining = [activeWorkspace.voiceRules, activeWorkspace.offer, activeWorkspace.proofAssets, kimiSettings.voiceTraining || laidSettings.voiceTraining || ''].filter(Boolean).join('\n');
 
   const { pack } = await runPipelineWithFallback(
-    request,
+    { ...request, clientWorkspace: activeWorkspace },
     { openaiKey, perplexityKey, audience, voiceTraining },
     onProgress
   );
