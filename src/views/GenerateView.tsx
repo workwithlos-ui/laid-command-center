@@ -11,6 +11,7 @@ import { buildAgentArtifacts } from '@/lib/agentArtifacts';
 import { buildSourcePreparation } from '@/lib/sourceIntelligence';
 import { recordLearnedRule, recordMemoryEvent } from '@/lib/warRoomMemory';
 import { getActiveClientWorkspace } from '@/lib/clientWorkspace';
+import { OPENAI_KEY_VERIFICATION_EVENT, readOpenAIKeyVerification } from '@/lib/openaiKeyVerification';
 import type { AgentArtifact, ClientWorkspace, ContentBriefSummary, ContentPack, ContentStyle, GenerationInputMode, GenerationProgress, SourceIntelligenceSummary } from '@/data/types';
 import { styleDescriptions, styleLabels } from '@/data/types';
 
@@ -283,15 +284,18 @@ export function GenerateView() {
   const [toast, setToast] = useState('');
   const [approvedBriefKey, setApprovedBriefKey] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<ClientWorkspace>(() => getActiveClientWorkspace());
+  const [keyVerification, setKeyVerification] = useState(() => readOpenAIKeyVerification());
 
   useEffect(() => {
     const refreshSettings = () => {
       const workspace = getActiveClientWorkspace();
       setActiveWorkspace(workspace);
       setApiKey(localStorage.getItem(OPENAI_KEY) || '');
+      setKeyVerification(readOpenAIKeyVerification());
       setAudience(workspace.audience || localStorage.getItem('content_command_audience') || '500k-10M founders/operators');
       setStyle(((localStorage.getItem('content_command_default_style') as ContentStyle) || 'ai_news'));
     };
+    const refreshKeyVerification = () => setKeyVerification(readOpenAIKeyVerification());
     refreshSettings();
     const storedPacks = readGeneratedPacks();
     const hydratedPacks = storedPacks.map((pack) => {
@@ -323,9 +327,11 @@ export function GenerateView() {
     }
     window.addEventListener('content-command-settings-updated', refreshSettings);
     window.addEventListener('content-command-workspace-updated', refreshSettings);
+    window.addEventListener(OPENAI_KEY_VERIFICATION_EVENT, refreshKeyVerification);
     return () => {
       window.removeEventListener('content-command-settings-updated', refreshSettings);
       window.removeEventListener('content-command-workspace-updated', refreshSettings);
+      window.removeEventListener(OPENAI_KEY_VERIFICATION_EVENT, refreshKeyVerification);
     };
   }, []);
 
@@ -354,6 +360,12 @@ export function GenerateView() {
   );
   const briefKey = JSON.stringify({ currentRequest, audience });
   const briefApproved = approvedBriefKey === briefKey;
+  const keyBadgeClasses = {
+    unknown: 'border-white/10 bg-white/[0.045] text-[#A1A1AA]',
+    ok: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300',
+    invalid: 'border-rose-400/25 bg-rose-400/10 text-rose-300',
+  }[keyVerification.status];
+  const KeyBadgeIcon = keyVerification.status === 'ok' ? CheckCircle2 : keyVerification.status === 'invalid' ? AlertCircle : KeyRound;
 
   const persistPacks = (nextPacks: ContentPack[]) => {
     setPacks(nextPacks);
@@ -475,9 +487,9 @@ export function GenerateView() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
-            <div className="flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" />
-              OpenAI key connected
+            <div className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs ${keyBadgeClasses}`}>
+              <KeyBadgeIcon className="h-4 w-4" />
+              {keyVerification.message}
             </div>
             <div className="rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-xs text-[#A1A1AA]">
               {activeWorkspace.industry || 'Client workspace ready'}

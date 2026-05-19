@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router';
 import { Sidebar } from '@/components/Sidebar';
 import { TopBar } from '@/components/TopBar';
+import { readOpenAIKeyVerification, readStoredOpenAIKey, verifyOpenAIKey } from '@/lib/openaiKeyVerification';
 
 const DashboardView = lazy(() => import('@/views/DashboardView').then((module) => ({ default: module.DashboardView })));
 const GenerateView = lazy(() => import('@/views/GenerateView').then((module) => ({ default: module.GenerateView })));
@@ -21,6 +22,13 @@ function RouteLoading() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const apiKey = readStoredOpenAIKey();
+    if (apiKey.trim() && readOpenAIKeyVerification(apiKey).status === 'unknown') {
+      void verifyOpenAIKey(apiKey);
+    }
+  }, []);
+
   return (
     <div className="obsidian-shell min-h-[100dvh]">
       <Sidebar />

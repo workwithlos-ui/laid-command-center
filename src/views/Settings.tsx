@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Building2, Eye, EyeOff, KeyRound, Plus, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Building2, Eye, EyeOff, KeyRound, Loader2, Plus, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ClientWorkspace } from '@/data/types';
 import { createClientWorkspaceSeed, deleteClientWorkspace, readClientWorkspaces, saveClientWorkspaces, setActiveClientWorkspace, upsertClientWorkspace } from '@/lib/clientWorkspace';
+import { clearOpenAIKeyVerification, readOpenAIKeyVerification, verifyOpenAIKey, type OpenAIKeyVerificationResult } from '@/lib/openaiKeyVerification';
 
 const OPENAI_KEY = 'openai_api_key';
 const AUDIENCE_KEY = 'content_command_audience';
@@ -50,6 +51,8 @@ export function Settings() {
   const [defaultStyle, setDefaultStyle] = useState(() => localStorage.getItem(STYLE_KEY) || 'ai_news');
   const [workspaces, setWorkspaces] = useState<ClientWorkspace[]>(initialWorkspaces);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => localStorage.getItem('content-command-active-client-workspace') || initialWorkspaces[0]?.id || 'los-internal');
+  const [keyVerification, setKeyVerification] = useState<OpenAIKeyVerificationResult>(() => readOpenAIKeyVerification());
+  const [isVerifyingKey, setIsVerifyingKey] = useState(false);
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) || workspaces[0];
 
@@ -93,7 +96,7 @@ export function Settings() {
     toast.success('Workspace deleted.');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!activeWorkspace) return;
     const trimmedKey = apiKey.trim();
     const workspace = { ...activeWorkspace, audience: audience.trim() || activeWorkspace.audience || '500k-10M founders/operators', updatedAt: new Date().toISOString() };
@@ -105,8 +108,30 @@ export function Settings() {
     localStorage.setItem(STYLE_KEY, defaultStyle);
     syncLegacySettings(trimmedKey, workspace.audience, defaultStyle, workspace);
     window.dispatchEvent(new Event('content-command-settings-updated'));
+    if (trimmedKey) {
+      setIsVerifyingKey(true);
+      const result = await verifyOpenAIKey(trimmedKey);
+      setKeyVerification(result);
+      setIsVerifyingKey(false);
+      if (result.status === 'ok') {
+        toast.success('Settings saved. OpenAI key verified.');
+      } else {
+        toast.error('Settings saved, but OpenAI rejected the key.');
+      }
+      return;
+    }
+    clearOpenAIKeyVerification();
+    setKeyVerification(readOpenAIKeyVerification(''));
     toast.success('Settings saved. Workspace context is ready.');
   };
+
+  const badgeClasses = {
+    unknown: 'border-white/10 bg-white/[0.045] text-[#A1A1AA]',
+    ok: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300',
+    invalid: 'border-rose-400/25 bg-rose-400/10 text-rose-300',
+  }[isVerifyingKey ? 'unknown' : keyVerification.status];
+
+  const badgeLabel = isVerifyingKey ? 'Testing OpenAI key' : keyVerification.message;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -121,8 +146,9 @@ export function Settings() {
               Configure the API key, active client, offer, voice, proof assets, and default CTA. Every generation uses this workspace context.
             </p>
           </div>
-          <div className="rounded-full border border-[#A855F7]/30 bg-[#A855F7]/12 px-4 py-2 text-xs font-medium text-[#D8B4FE]">
-            Sellable workspace mode
+          <div className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium ${badgeClasses}`}>
+            {isVerifyingKey && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {badgeLabel}
           </div>
         </div>
       </section>
@@ -146,7 +172,10 @@ export function Settings() {
                 <Input
                   type={showKey ? 'text' : 'password'}
                   value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
+                  onChange={(event) => {
+                    setApiKey(event.target.value);
+                    setKeyVerification(readOpenAIKeyVerification(event.target.value));
+                  }}
                   placeholder="sk-..."
                   className="h-12 rounded-2xl border-white/[0.08] bg-white/[0.045] pr-12 text-[#F8FAFC] placeholder:text-[#71717A] focus-visible:ring-[#A855F7]/30"
                 />
@@ -175,9 +204,9 @@ export function Settings() {
               </Select>
             </div>
 
-            <Button onClick={handleSave} className="h-12 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#22D3EE] px-6 text-sm font-semibold text-white shadow-[0_0_34px_rgba(168,85,247,0.28)] hover:opacity-95">
-              <SettingsIcon className="mr-2 h-4 w-4" />
-              Save Settings
+            <Button onClick={() => void handleSave()} disabled={isVerifyingKey} className="h-12 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#22D3EE] px-6 text-sm font-semibold text-white shadow-[0_0_34px_rgba(168,85,247,0.28)] hover:opacity-95 disabled:opacity-55">
+              {isVerifyingKey ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SettingsIcon className="mr-2 h-4 w-4" />}
+              {isVerifyingKey ? 'Testing Key' : 'Save Settings'}
             </Button>
           </div>
         </div>
