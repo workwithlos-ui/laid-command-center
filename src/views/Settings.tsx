@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Building2, Eye, EyeOff, KeyRound, Loader2, Plus, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ClientWorkspace } from '@/data/types';
 import { createClientWorkspaceSeed, deleteClientWorkspace, readClientWorkspaces, saveClientWorkspaces, setActiveClientWorkspace, upsertClientWorkspace } from '@/lib/clientWorkspace';
-import { clearOpenAIKeyVerification, readOpenAIKeyVerification, verifyOpenAIKey, type OpenAIKeyVerificationResult } from '@/lib/openaiKeyVerification';
+import { clearOpenAIKeyVerification, OPENAI_KEY_VERIFICATION_EVENT, readOpenAIKeyVerification, verifyOpenAIKey, type OpenAIKeyVerificationResult } from '@/lib/openaiKeyVerification';
 
 const OPENAI_KEY = 'openai_api_key';
 const AUDIENCE_KEY = 'content_command_audience';
@@ -53,6 +53,12 @@ export function Settings() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => localStorage.getItem('content-command-active-client-workspace') || initialWorkspaces[0]?.id || 'los-internal');
   const [keyVerification, setKeyVerification] = useState<OpenAIKeyVerificationResult>(() => readOpenAIKeyVerification());
   const [isVerifyingKey, setIsVerifyingKey] = useState(false);
+
+  useEffect(() => {
+    const refreshKeyVerification = () => setKeyVerification(readOpenAIKeyVerification());
+    window.addEventListener(OPENAI_KEY_VERIFICATION_EVENT, refreshKeyVerification);
+    return () => window.removeEventListener(OPENAI_KEY_VERIFICATION_EVENT, refreshKeyVerification);
+  }, []);
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) || workspaces[0];
 
